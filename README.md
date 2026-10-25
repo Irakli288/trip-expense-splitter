@@ -25,10 +25,12 @@
 
 ## Основные сущности
 
-- **Поездка** — название, даты начала и окончания, бюджет, валюта.
-- **Участник** — имя, контакт, принадлежность к поездке.
-- **Расход** — название, сумма, дата, категория, кто оплатил, между кем делится.
-- **Расчет** — доля и баланс каждого участника, список переводов «кто → кому → сколько».
+| Сущность | Класс | Назначение |
+|---|---|---|
+| Поездка | `Trip` | название, даты и бюджет совместной поездки |
+| Участник | `Participant` | человек, который едет в поездку |
+| Расход | `Expense` | трата: кто оплатил и между кем она делится |
+| Расчет | `Settlement` | балансы участников и переводы «кто → кому → сколько» |
 
 ## Возможности
 
@@ -43,6 +45,95 @@
 - сохранение всех данных в JSON-файлах и загрузка при запуске;
 - обработка некорректного ввода и ошибок файлов без аварийного завершения.
 
+## Объектная модель (ПР3)
+
+Классы находятся в пакете `models` и импортируются из него:
+`from models import Trip, Participant, Expense, Settlement`.
+
+### Trip — поездка
+
+Атрибуты: `id`, `name`, `start_date` и `end_date` (объекты `date`), `budget`.
+
+Методы:
+
+- `duration` — длительность поездки в днях (свойство, `@property`);
+- `check_budget(total_amount)` — сравнение суммы расходов с бюджетом;
+- `validate_dates(start_date, end_date)` — проверка дат (`@staticmethod`),
+  конструктор не создает поездку, которая заканчивается раньше начала;
+- `__str__()` — «Поездка в Казань: 03.11.2026 – 06.11.2026 (4 дн.), бюджет 60000.00 ₽».
+
+### Participant — участник
+
+Атрибуты: `id`, `name`, `trip` — ссылка на объект `Trip`.
+
+Методы:
+
+- `from_data(data, trip)` — создание участника из записи JSON (`@classmethod`);
+- `__str__()` — «Ираклий (Поездка в Казань)».
+
+### Expense — расход
+
+Атрибуты: `id`, `trip` (объект `Trip`), `title`, `amount`, `category`, `date`,
+`payer` (объект `Participant`), `split_between` (список объектов `Participant`).
+
+Методы:
+
+- `share` — доля одного участника в расходе (свойство);
+- `is_shared_with(participant)` — участвует ли участник в разделе расхода;
+- `validate_category(category)` — проверка категории (`@staticmethod`);
+- `__str__()` — строка с суммой, категорией, плательщиком и участниками.
+
+Конструктор проверяет сумму, категорию и непустой список участников
+и при ошибке выбрасывает `ValueError`.
+
+### Settlement — расчет
+
+Атрибуты: `trip`, `participants`, `expenses`.
+
+Методы:
+
+- `get_balances()` — баланс каждого участника `{Participant: сумма}`;
+- `get_transfers()` — переводы `(должник, получатель, сумма)`;
+- `__str__()` — статусы участников и список переводов для вывода в меню.
+
+### Взаимодействие объектов
+
+```
+Expense ──trip──────────→ Trip
+   ├──payer─────────────→ Participant ──trip──→ Trip
+   └──split_between─────→ [Participant, ...]
+
+Settlement ──→ Trip, [Participant, ...], [Expense, ...]
+```
+
+Расход хранит ссылки на объекты, поэтому данные связанных объектов доступны
+напрямую: `expense.payer.name`, `expense.trip.budget`. `Settlement` получает
+участников и расходы поездки и считает, кто кому должен.
+
+В программе используются коллекции объектов: `list[Trip]`,
+`list[Participant]`, `list[Expense]`. Функции модулей пакета `models`
+(поиск, отбор, сортировка, добавление, вывод) работают с этими коллекциями,
+а операции над одним объектом выполняются его методами.
+
+### Что стало с функциями ПР2
+
+| Функция ПР2 | В ПР3 |
+|---|---|
+| `get_trip_duration()` | свойство `Trip.duration` |
+| `check_budget()` | метод `Trip.check_budget()` |
+| `add_trip()`, `add_participant()`, `add_expense()` | создают объект класса, добавляют его в коллекцию и возвращают |
+| `get_trip()`, `find_trips()`, `sort_trips()` | работают со списком объектов `Trip` |
+| `get_trip_participants()` | отбирает объекты `Participant` по ссылке на поездку |
+| `get_names()` | больше не нужна: имя берется из `participant.name` |
+| `delete_expense()`, `iter_trip_expenses()`, `filter_by_category()`, `sort_expenses()`, `get_total()`, `get_totals_by_category()` | работают с объектами `Expense` |
+| `calculate_balances()` | метод `Settlement.get_balances()` |
+| `make_transfers()` | функция, вызывается из `Settlement.get_transfers()` |
+| `calculate_share()`, `calculate_balance()`, `get_settlement_status()` | остались функциями (ПР1) |
+| `show_trips()`, `show_participants()`, `show_expenses()` | перенесены из `main.py` в модули `models` |
+| `show_settlement()` | заменена выводом `print(Settlement(...))` |
+| `load_*()` / `save_*()` | остались в `storage.py`, создают объекты и превращают их обратно в записи |
+| `input_*()`, `parse_*()`, `format_money()` | остались вспомогательными функциями `utils.py` |
+
 ## Структура проекта
 
 ```
@@ -51,39 +142,37 @@ trip-expense-splitter/
 ├── requirements.txt
 ├── pytest.ini              # настройки pytest
 ├── .flake8                 # настройки flake8
-├── main.py                 # точка запуска, меню и вывод данных
-├── trips.py                # работа с поездками
-├── participants.py         # работа с участниками
-├── expenses.py             # работа с расходами
-├── settlement.py           # доли, балансы, переводы
-├── storage.py              # сохранение и загрузка JSON
+├── main.py                 # точка запуска и меню
+├── storage.py              # JSON ↔ объекты
 ├── utils.py                # разбор сумм и дат, безопасный ввод
+├── models/
+│   ├── __init__.py         # импорт классов из пакета
+│   ├── trips.py            # Trip и функции работы с поездками
+│   ├── participants.py     # Participant и функции работы с участниками
+│   ├── expenses.py         # Expense и функции работы с расходами
+│   └── settlement.py       # Settlement, балансы и переводы
 ├── data/
 │   ├── trips.json
 │   ├── participants.json
 │   └── expenses.json
 └── tests/
+    ├── conftest.py         # общие объекты для тестов
     ├── test_trips.py
+    ├── test_participants.py
     ├── test_expenses.py
     ├── test_settlement.py
     └── test_storage.py
 ```
 
-| Модуль | Функции |
-|---|---|
-| `main.py` | `main`, `show_trips`, `show_participants`, `show_expenses`, `show_settlement`, `create_trip`, `create_expense` |
-| `trips.py` | `add_trip`, `get_trip`, `find_trips`, `sort_trips`, `get_trip_duration` (ПР1), `check_budget` (ПР1) |
-| `participants.py` | `add_participant`, `get_trip_participants`, `get_names` |
-| `expenses.py` | `add_expense`, `delete_expense`, `iter_trip_expenses`, `filter_by_category`, `sort_expenses`, `get_total`, `get_totals_by_category` |
-| `settlement.py` | `calculate_balances`, `make_transfers`, `calculate_share` (ПР1), `calculate_balance` (ПР1), `get_settlement_status` (ПР1) |
-| `storage.py` | `load_records` / `save_records`, `load_trips` / `save_trips`, `load_participants` / `save_participants`, `load_expenses` / `save_expenses` |
-| `utils.py` | `parse_amount` (ПР1), `parse_date`, `format_money`, `input_text`, `input_int`, `input_amount`, `input_date`, `input_ids` |
-
 ## Формат данных
 
-Данные хранятся в каталоге `data/` в виде списков словарей. В программе
-поездки загружаются в словарь `trips` (ключ — номер поездки), участники
-и расходы — в списки `participants` и `expenses`.
+Данные хранятся в каталоге `data/` в виде списков записей. Формат файлов
+не изменился по сравнению с ПР2. При загрузке `storage.py` превращает записи
+в объекты и восстанавливает связи: по `trip_id` находит объект `Trip`,
+по `payer_id` и `split_between` — объекты `Participant`. При сохранении
+объекты снова превращаются в записи, а ссылки — в номера. Запись, которая
+ссылается на несуществующую поездку или участника, пропускается
+с предупреждением.
 
 `trips.json`:
 
@@ -120,6 +209,9 @@ trip-expense-splitter/
 - **ПР2** — консольное приложение с несколькими поездками, участниками и
   расходами, модули, обработка исключений, хранение данных в JSON, тесты.
   Функции ПР1 сохранены и используются в новых модулях.
+- **ПР3** — объектная модель: классы `Trip`, `Participant`, `Expense`,
+  `Settlement`, коллекции объектов вместо словарей, загрузка JSON в объекты,
+  тесты адаптированы к классам.
 
 ## Требования
 
@@ -141,7 +233,7 @@ pip install -r requirements.txt
 python main.py
 ```
 
-Пример расчета для поездки в Казань:
+Пример расчета для поездки в Казань (пункт 10 меню выводит объект `Settlement`):
 
 ```
 Выберите действие: 10
@@ -157,20 +249,24 @@ python main.py
 ## Запуск тестов
 
 ```bash
-pytest
+pytest -v
 ```
+
+Тесты проверяют создание объектов и значения атрибутов, методы и `__str__`
+классов, поиск, отбор и сортировку коллекций, связь расхода с поездкой
+и участниками, расчет балансов и переводов, сохранение объектов в JSON
+и восстановление связей при загрузке.
 
 ## Проверка качества кода
 
 ```bash
-flake8
+flake8 .
 ```
 
 ## План развития
 
 На следующих этапах планируется:
 
-- ПР3: сущности «Поездка», «Участник», «Расход», «Расчет» в виде классов;
 - разработка веб-приложения на Django;
 - подключение базы данных и моделей предметной области;
 - реализация пользователей, регистрации и разграничения доступа к поездкам;
