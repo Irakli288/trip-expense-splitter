@@ -1,0 +1,53 @@
+/* Собственные стили сервиса распределения расходов поездки (ПР6). */
+
+:root {
+    --splitter-accent: #0d6efd;
+    --splitter-muted: #6c757d;
+    --splitter-background: #f5f7fb;
+}
+
+body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    background-color: var(--splitter-background);
+}
+
+main {
+    flex: 1 0 auto;
+}
+
+.splitter-logo {
+    width: 36px;
+    height: 36px;
+    margin-right: 0.5rem;
+    border-radius: 8px;
+}
+
+.trip-card {
+    border: 0;
+    border-left: 4px solid var(--splitter-accent);
+    border-radius: 8px;
+    transition: box-shadow 0.2s ease-in-out;
+}
+
+.trip-card:hover {
+    box-shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.08);
+}
+
+.budget-badge,
+.balance-badge {
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.category-badge {
+    font-weight: 500;
+    letter-spacing: 0.02em;
+}
+
+.site-footer {
+    padding-top: 1rem;
+    border-top: 1px solid #dee2e6;
+    color: var(--splitter-muted);
+}
