@@ -1,25 +1,31 @@
-from expenses import add_expense
-from settlement import (
-    calculate_balances,
-    calculate_share,
-    get_settlement_status,
-    make_transfers,
-)
-
-
-def test_calculate_share():
-    assert calculate_share(100, 3) == 33.34
-    assert calculate_share(100, 0) == 0.0
+from models import Settlement
+from models.expenses import add_expense
+from models.settlement import get_settlement_status, make_transfers
 
 
 def test_settlement_status():
     assert "вернуть 17000.00" in get_settlement_status("Ираклий", 17000)
+    assert "перевести 500.00" in get_settlement_status("Анна", -500)
+    assert "завершен" in get_settlement_status("Максим", 0)
 
 
-def test_balances_and_transfers():
+def test_balances_and_transfers(trip, people):
+    ira, anna, max_ = people
     expenses = []
-    add_expense(expenses, 1, "Аренда квартиры", 25500, 1, [1, 2, 3])
-    add_expense(expenses, 1, "Билеты на поезд", 18000, 2, [1, 2, 3])
-    balances = calculate_balances(expenses, [1, 2, 3])
-    assert balances == {1: 11000.0, 2: 3500.0, 3: -14500.0}
-    assert make_transfers(balances) == [(3, 1, 11000.0), (3, 2, 3500.0)]
+    add_expense(expenses, trip, "Аренда квартиры", 25500, ira, people)
+    add_expense(expenses, trip, "Билеты на поезд", 18000, anna, people)
+    settlement = Settlement(trip, people, expenses)
+    balances = settlement.get_balances()
+    assert balances == {ira: 11000.0, anna: 3500.0, max_: -14500.0}
+    assert make_transfers(balances) == [(max_, ira, 11000.0),
+                                        (max_, anna, 3500.0)]
+    assert settlement.get_transfers() == make_transfers(balances)
+
+
+def test_settlement_str(trip, people):
+    ira, anna, max_ = people
+    expenses = []
+    add_expense(expenses, trip, "Аренда квартиры", 3000, ira, people)
+    text = str(Settlement(trip, people, expenses))
+    assert "Ираклий: ему должны вернуть 2000.00" in text
+    assert "Анна → Ираклий: 1000.00" in text
