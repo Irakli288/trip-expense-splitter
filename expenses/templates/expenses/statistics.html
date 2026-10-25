@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block title %}Статистика – Сервис расходов поездки{% endblock %}
+
+{% block content %}
+    <h1>Статистика расходов</h1>
+
+    <div class="row g-4">
+        <section class="col-lg-7">
+            <h2 class="h5">Расходы по категориям</h2>
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Категория</th>
+                        <th class="text-end">Расходов</th>
+                        <th class="text-end">Сумма</th>
+                        <th class="text-end">Средний</th>
+                        <th class="text-end">Наибольший</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in categories %}
+                        <tr>
+                            <td>{% include "expenses/includes/category_badge.html" with expense=item %}</td>
+                            <td class="text-end">{{ item.expenses_count }}</td>
+                            <td class="text-end">{{ item.total|floatformat:"2g" }} ₽</td>
+                            <td class="text-end">{{ item.average_amount|floatformat:"2g" }} ₽</td>
+                            <td class="text-end">{{ item.max_amount|floatformat:"2g" }} ₽</td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="5">Данные отсутствуют.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </section>
+
+        <section class="col-lg-5">
+            <h2 class="h5">Самые крупные расходы</h2>
+            <ol class="list-group list-group-numbered mb-4">
+                {% for expense in top_expenses %}
+                    <li class="list-group-item d-flex justify-content-between">
+                        <a href="{% url 'expenses:detail' expense.id %}">{{ expense.title }}</a>
+                        <span>{{ expense.amount|floatformat:"2g" }} ₽</span>
+                    </li>
+                {% empty %}
+                    <li class="list-group-item">Расходов пока нет</li>
+                {% endfor %}
+            </ol>
+
+            <h2 class="h5">Бюджет почти исчерпан</h2>
+            <ul class="list-group">
+                {% for trip in budget_alerts %}
+                    <li class="list-group-item d-flex justify-content-between">
+                        <a href="{% url 'trips:detail' trip.id %}">{{ trip.name }}</a>
+                        <span class="badge {% if trip.used_percent > 100 %}bg-danger{% else %}bg-warning text-dark{% endif %}">
+                            {{ trip.used_percent }}% бюджета
+                        </span>
+                    </li>
+                {% empty %}
+                    <li class="list-group-item">Все поездки в пределах 80% бюджета</li>
+                {% endfor %}
+            </ul>
+        </section>
+
+        <section class="col-lg-7">
+            <h2 class="h5">Кто сколько оплатил</h2>
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Участник</th>
+                        <th>Поездка</th>
+                        <th class="text-end">Оплатил расходов</th>
+                        <th class="text-end">На сумму</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for payer in payers %}
+                        <tr>
+                            <td>{{ payer.participant_name }}</td>
+                            <td>{{ payer.trip_name }}</td>
+                            <td class="text-end">{{ payer.expenses_count }}</td>
+                            <td class="text-end">{{ payer.paid_total|floatformat:"2g" }} ₽</td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="4">Участников пока нет.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </section>
+
+        <section class="col-lg-5">
+            <h2 class="h5">Крупные категории</h2>
+            <form method="get" class="d-flex gap-2 mb-2">
+                <label for="min_total" class="col-form-label text-nowrap">Сумма от, ₽</label>
+                <input type="number" id="min_total" name="min_total" min="0" step="any"
+                       class="form-control" value="{{ min_total }}">
+                <button type="submit" class="btn btn-primary">Показать</button>
+            </form>
+            <ul class="list-group">
+                {% for item in big_categories %}
+                    <li class="list-group-item d-flex justify-content-between">
+                        {{ item.category|capfirst }}
+                        <strong>{{ item.total|floatformat:"2g" }} ₽</strong>
+                    </li>
+                {% empty %}
+                    <li class="list-group-item">Нет категорий с такой суммой</li>
+                {% endfor %}
+            </ul>
+        </section>
+    </div>
+{% endblock %}

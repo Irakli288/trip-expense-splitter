@@ -15,8 +15,8 @@
                 <h1 class="card-title h3">{{ expense.title }}</h1>
                 <p class="card-text">
                     <strong>Поездка:</strong>
-                    <a href="{% url 'trips:detail' expense.trip.id %}">
-                        {{ expense.trip.name }}
+                    <a href="{% url 'trips:detail' expense.trip_id %}">
+                        {{ expense.trip_name }}
                     </a>
                 </p>
                 <p class="card-text">
@@ -24,15 +24,15 @@
                     {% include "expenses/includes/category_badge.html" %}
                 </p>
                 <p class="card-text">
-                    <strong>Дата:</strong> {{ expense.date|date:"d.m.Y" }}
+                    <strong>Дата:</strong> {{ expense.expense_date_ru }}
                 </p>
                 <p class="card-text">
-                    <strong>Оплатил:</strong> {{ expense.payer.name }}
+                    <strong>Оплатил:</strong> {{ expense.payer_name }}
                 </p>
                 <p class="card-text">
                     <strong>Делится между:</strong>
-                    {% for person in expense.split_between %}{{ person.name }}{% if not forloop.last %}, {% endif %}{% endfor %}
-                    (по {{ expense.share|floatformat:"2g" }} ₽ с каждого)
+                    {% for person in shares %}{{ person.name }}{% if not forloop.last %}, {% endif %}{% endfor %}
+                    (по {{ share|floatformat:"2g" }} ₽ с каждого)
                 </p>
                 <a href="{% url 'expenses:list' %}" class="btn btn-outline-secondary">
                     ← к списку расходов

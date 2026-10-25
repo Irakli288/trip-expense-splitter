@@ -3,14 +3,50 @@
 {% block title %}Расходы – Сервис расходов поездки{% endblock %}
 
 {% block content %}
-    <h1>Расходы</h1>
-    <p class="text-body-secondary">Всего расходов: {{ expenses|length }}</p>
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <h1 class="mb-0">Расходы</h1>
+        <a href="{% url 'expenses:statistics' %}" class="btn btn-outline-primary">
+            Статистика расходов
+        </a>
+    </div>
+
+    <form method="get" class="row g-2 align-items-end mb-3 expense-filter">
+        <div class="col-sm-4">
+            <label for="trip" class="form-label">Поездка</label>
+            <select id="trip" name="trip" class="form-select">
+                <option value="0">Все поездки</option>
+                {% for trip in trips %}
+                    <option value="{{ trip.id }}" {% if trip.id == selected_trip %}selected{% endif %}>{{ trip.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-sm-3">
+            <label for="category" class="form-label">Категория</label>
+            <select id="category" name="category" class="form-select">
+                <option value="">Все категории</option>
+                {% for category in categories %}
+                    <option value="{{ category }}" {% if category == selected_category %}selected{% endif %}>{{ category|capfirst }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-sm-3">
+            <label for="min_amount" class="form-label">Сумма от, ₽</label>
+            <input type="number" id="min_amount" name="min_amount" min="0" step="any"
+                   class="form-control" value="{{ min_amount }}">
+        </div>
+        <div class="col-sm-2 d-grid">
+            <button type="submit" class="btn btn-primary">Найти</button>
+        </div>
+    </form>
+
+    <p class="text-body-secondary">Найдено расходов: {{ summary.expenses_count }}</p>
     <table class="table table-hover">
         <thead>
             <tr>
                 <th>Дата</th>
                 <th>Расход</th>
                 <th>Поездка</th>
+                <th>Оплатил</th>
                 <th>Категория</th>
                 <th class="text-end">Сумма</th>
             </tr>
@@ -18,26 +54,27 @@
         <tbody>
             {% for expense in expenses %}
                 <tr>
-                    <td>{{ expense.date|date:"d.m.Y" }}</td>
+                    <td>{{ expense.expense_date_ru }}</td>
                     <td>
                         <a href="{% url 'expenses:detail' expense.id %}">
                             {{ expense.title|default:"Без названия" }}
                         </a>
                     </td>
                     <td>
-                        <a href="{% url 'trips:detail' expense.trip.id %}">
-                            {{ expense.trip.name }}
+                        <a href="{% url 'trips:detail' expense.trip_id %}">
+                            {{ expense.trip_name }}
                         </a>
                     </td>
+                    <td>{{ expense.payer_name }}</td>
                     <td>{% include "expenses/includes/category_badge.html" %}</td>
                     <td class="text-end">{{ expense.amount|floatformat:"2g" }} ₽</td>
                 </tr>
             {% empty %}
                 <tr>
-                    <td colspan="5">Расходы не найдены.</td>
+                    <td colspan="6">Расходы не найдены.</td>
                 </tr>
             {% endfor %}
         </tbody>
     </table>
-    <p class="fw-bold">Итого: {{ total|floatformat:"2g" }} ₽</p>
+    <p class="fw-bold">Итого: {{ summary.expenses_total|floatformat:"2g" }} ₽</p>
 {% endblock %}
