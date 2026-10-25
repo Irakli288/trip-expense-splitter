@@ -1,0 +1,3 @@
+<span class="badge budget-badge {% if budget_level == 'over' %}bg-danger{% elif budget_level == 'warning' %}bg-warning text-dark{% elif budget_level == 'ok' %}bg-success{% else %}bg-secondary{% endif %}">
+    {{ total|floatformat:"2g" }} ₽ из {{ trip.budget|floatformat:"2g" }} ₽
+</span>

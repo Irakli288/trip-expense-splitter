@@ -35,6 +35,15 @@ def test_check_budget():
     assert "в пределах" in trip.check_budget(1000)
 
 
+def test_budget_level():
+    trip = Trip(1, "Поездка", date(2026, 11, 3), date(2026, 11, 6), 30000)
+    assert trip.budget_level(31000) == "over"
+    assert trip.budget_level(25500) == "warning"
+    assert trip.budget_level(1000) == "ok"
+    trip.budget = 0
+    assert trip.budget_level(1000) == "none"
+
+
 def test_add_and_get_trip():
     trips = []
     trip = add_trip(trips, "Поездка в Казань", date(2026, 11, 3),

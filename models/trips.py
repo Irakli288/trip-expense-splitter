@@ -48,6 +48,21 @@ class Trip:
         else:
             return f"Расходы в пределах бюджета ({used_percent}%)"
 
+    def budget_level(self, total_amount: float) -> str:
+        """Вернуть уровень расходования бюджета (добавлен в ПР6).
+
+        none — бюджет не задан, ok — в пределах бюджета,
+        warning — израсходовано 80% и больше, over — бюджет превышен.
+        Шаблоны выбирают по уровню цвет отметки бюджета.
+        """
+        if self.budget <= 0:
+            return "none"
+        if total_amount > self.budget:
+            return "over"
+        if total_amount >= self.budget * 0.8:
+            return "warning"
+        return "ok"
+
     def __str__(self) -> str:
         """Вернуть строку вида «Название: даты (дни), бюджет»."""
         return (f"{self.name}: {self.start_date:%d.%m.%Y} – "

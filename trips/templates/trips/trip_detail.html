@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}
+    {% if trip %}
+        {{ trip.name }} – Сервис расходов поездки
+    {% else %}
+        Поездка не найдена – Сервис расходов поездки
+    {% endif %}
+{% endblock %}
+
+{% block content %}
+    {% if trip %}
+        <div class="card mb-4">
+            <div class="card-body">
+                <h1 class="card-title h3">{{ trip.name }}</h1>
+                <p class="card-text">
+                    <strong>Даты:</strong>
+                    {{ trip.start_date|date:"d.m.Y" }} – {{ trip.end_date|date:"d.m.Y" }}
+                    ({{ trip.duration }} дн.)
+                </p>
+                <p class="card-text">
+                    <strong>Потрачено:</strong>
+                    {% include "trips/includes/budget_badge.html" %}
+                    <span class="ms-1">{{ budget_message }}</span>
+                </p>
+                <a href="{% url 'trips:settlement' trip.id %}" class="btn btn-primary">
+                    Кто кому должен
+                </a>
+                <a href="{% url 'trips:list' %}" class="btn btn-outline-secondary">
+                    ← к списку поездок
+                </a>
+            </div>
+        </div>
+        <div class="row g-4">
+            <div class="col-md-4">
+                <h2 class="h5">Участники ({{ participants|length }})</h2>
+                <ul class="list-group">
+                    {% for person in participants %}
+                        <li class="list-group-item">{{ person.name }}</li>
+                    {% empty %}
+                        <li class="list-group-item">Участников нет</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            <div class="col-md-8">
+                <h2 class="h5">Расходы ({{ expenses|length }})</h2>
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Расход</th>
+                            <th>Категория</th>
+                            <th>Оплатил</th>
+                            <th class="text-end">Сумма</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for expense in expenses %}
+                            <tr>
+                                <td>
+                                    <a href="{% url 'expenses:detail' expense.id %}">
+                                        {{ expense.title }}
+                                    </a>
+                                </td>
+                                <td>{% include "expenses/includes/category_badge.html" %}</td>
+                                <td>{{ expense.payer.name }}</td>
+                                <td class="text-end">{{ expense.amount|floatformat:"2g" }} ₽</td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="4">Расходов пока нет</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    {% else %}
+        <h1 class="text-danger">Поездка не найдена</h1>
+        <p>Поездка с указанным номером отсутствует.</p>
+        <a href="{% url 'trips:list' %}" class="btn btn-outline-secondary">
+            ← к списку поездок
+        </a>
+    {% endif %}
+{% endblock %}

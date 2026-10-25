@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block title %}
+    {% if trip %}
+        Расчет – {{ trip.name }}
+    {% else %}
+        Поездка не найдена – Сервис расходов поездки
+    {% endif %}
+{% endblock %}
+
+{% block content %}
+    {% if trip %}
+        <h1>Расчет: {{ trip.name }}</h1>
+        <div class="row g-4 mb-4">
+            <div class="col-md-6">
+                <h2 class="h5">Балансы участников</h2>
+                <ul class="list-group">
+                    {% for row in balances %}
+                        <li class="list-group-item d-flex justify-content-between">
+                            {{ row.status }}
+                            <span class="badge balance-badge {% if row.balance > 0 %}bg-success{% elif row.balance < 0 %}bg-danger{% else %}bg-secondary{% endif %}">
+                                {{ row.balance|floatformat:"2g" }} ₽
+                            </span>
+                        </li>
+                    {% empty %}
+                        <li class="list-group-item">В поездке нет участников</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            <div class="col-md-6">
+                <h2 class="h5">Переводы</h2>
+                <ul class="list-group">
+                    {% for debtor, creditor, amount in transfers %}
+                        <li class="list-group-item">
+                            {{ debtor.name }} → {{ creditor.name }}:
+                            <strong>{{ amount|floatformat:"2g" }} ₽</strong>
+                        </li>
+                    {% empty %}
+                        <li class="list-group-item">Переводы не нужны</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+        <a href="{% url 'trips:detail' trip.id %}" class="btn btn-outline-secondary">
+            ← к поездке
+        </a>
+    {% else %}
+        <h1 class="text-danger">Поездка не найдена</h1>
+        <p>Поездка с указанным номером отсутствует.</p>
+        <a href="{% url 'trips:list' %}" class="btn btn-outline-secondary">
+            ← к списку поездок
+        </a>
+    {% endif %}
+{% endblock %}
