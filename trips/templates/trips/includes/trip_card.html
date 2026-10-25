@@ -5,8 +5,10 @@
                 {{ trip.name|default:"Без названия" }}
             </h2>
             <p class="card-text text-body-secondary mb-2">
-                {{ trip.start_date|date:"d.m.Y" }} – {{ trip.end_date|date:"d.m.Y" }},
-                {{ trip.duration }} дн.
+                {{ trip.start_date_ru }} – {{ trip.end_date_ru }},
+                {{ trip.duration }} дн. ·
+                участников: {{ trip.participants_count }} ·
+                расходов: {{ trip.expenses_count }}
             </p>
             <a href="{% url 'trips:detail' trip.id %}" class="btn btn-primary btn-sm">
                 Подробнее

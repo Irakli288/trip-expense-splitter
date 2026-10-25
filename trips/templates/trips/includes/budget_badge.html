@@ -1,3 +1,3 @@
-<span class="badge budget-badge {% if budget_level == 'over' %}bg-danger{% elif budget_level == 'warning' %}bg-warning text-dark{% elif budget_level == 'ok' %}bg-success{% else %}bg-secondary{% endif %}">
-    {{ total|floatformat:"2g" }} ₽ из {{ trip.budget|floatformat:"2g" }} ₽
+<span class="badge budget-badge {% if trip.budget_level == 'over' %}bg-danger{% elif trip.budget_level == 'warning' %}bg-warning text-dark{% elif trip.budget_level == 'ok' %}bg-success{% else %}bg-secondary{% endif %}">
+    {{ trip.total|floatformat:"2g" }} ₽{% if trip.budget is not None %} из {{ trip.budget|floatformat:"2g" }} ₽{% endif %}
 </span>

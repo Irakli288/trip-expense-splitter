@@ -8,7 +8,34 @@
         Учет общих расходов в совместной поездке и расчет того,
         кто кому сколько должен перевести.
     </p>
+    <div class="row g-3 mb-4 summary-block">
+        <div class="col-6 col-md-3">
+            <div class="card summary-card"><div class="card-body">
+                <p class="summary-value">{{ summary.trips_count }}</p>
+                <p class="summary-label">поездок</p>
+            </div></div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card summary-card"><div class="card-body">
+                <p class="summary-value">{{ summary.participants_count }}</p>
+                <p class="summary-label">участников</p>
+            </div></div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card summary-card"><div class="card-body">
+                <p class="summary-value">{{ summary.expenses_count }}</p>
+                <p class="summary-label">расходов</p>
+            </div></div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card summary-card"><div class="card-body">
+                <p class="summary-value">{{ summary.expenses_total|floatformat:"0g" }} ₽</p>
+                <p class="summary-label">потрачено всего</p>
+            </div></div>
+        </div>
+    </div>
     <p>Основные разделы:</p>
     <a href="{% url 'trips:list' %}" class="btn btn-primary me-2">Поездки</a>
-    <a href="{% url 'expenses:list' %}" class="btn btn-secondary">Расходы</a>
+    <a href="{% url 'expenses:list' %}" class="btn btn-secondary me-2">Расходы</a>
+    <a href="{% url 'expenses:statistics' %}" class="btn btn-outline-secondary">Статистика</a>
 {% endblock %}

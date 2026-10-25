@@ -5,10 +5,11 @@
             <img src="{% static 'homepage/img/logo.png' %}" alt="Логотип сервиса" class="splitter-logo">
             Сервис расходов поездки
         </a>
-        <div class="navbar-nav">
+        <div class="navbar-nav flex-wrap">
             <a class="nav-link {% if request.resolver_match.app_name == 'homepage' %}active{% endif %}" href="{% url 'homepage:index' %}">Главная</a>
             <a class="nav-link {% if request.resolver_match.app_name == 'trips' %}active{% endif %}" href="{% url 'trips:list' %}">Поездки</a>
-            <a class="nav-link {% if request.resolver_match.app_name == 'expenses' %}active{% endif %}" href="{% url 'expenses:list' %}">Расходы</a>
+            <a class="nav-link {% if request.resolver_match.app_name == 'expenses' and request.resolver_match.url_name != 'statistics' %}active{% endif %}" href="{% url 'expenses:list' %}">Расходы</a>
+            <a class="nav-link {% if request.resolver_match.view_name == 'expenses:statistics' %}active{% endif %}" href="{% url 'expenses:statistics' %}">Статистика</a>
         </div>
     </div>
 </nav>

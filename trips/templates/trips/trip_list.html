@@ -4,9 +4,9 @@
 
 {% block content %}
     <h1>Поездки</h1>
-    <p class="text-body-secondary">Всего поездок: {{ trip_rows|length }}</p>
-    {% for row in trip_rows %}
-        {% include "trips/includes/trip_card.html" with trip=row.trip total=row.total budget_level=row.budget_level %}
+    <p class="text-body-secondary">Всего поездок: {{ trips|length }}</p>
+    {% for trip in trips %}
+        {% include "trips/includes/trip_card.html" %}
     {% empty %}
         <p>Поездок пока нет.</p>
     {% endfor %}
