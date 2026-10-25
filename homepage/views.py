@@ -1,4 +1,5 @@
 from django.http import HttpResponse
+from django.shortcuts import render
 
 
 def page(title, content):
@@ -31,17 +32,7 @@ def page(title, content):
 
 
 def index(request):
-    content = """
-    <h1 class="display-5">Сервис распределения расходов поездки</h1>
-    <p class="lead">
-        Учет общих расходов в совместной поездке и расчет того,
-        кто кому сколько должен перевести.
-    </p>
-    <p>Основные разделы:</p>
-    <a href="/trips/" class="btn btn-primary me-2">Поездки</a>
-    <a href="/expenses/" class="btn btn-secondary">Расходы</a>
-    """
-    return HttpResponse(page("Сервис расходов поездки", content))
+    return render(request, "homepage/index.html")
 
 
 def page_not_found(request, exception):
