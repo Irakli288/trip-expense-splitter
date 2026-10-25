@@ -1,0 +1,42 @@
+[
+    {
+        "id": 1,
+        "trip_id": 1,
+        "title": "Аренда квартиры",
+        "amount": 25500.0,
+        "category": "жилье",
+        "date": "2026-11-03",
+        "payer_id": 1,
+        "split_between": [1, 2, 3]
+    },
+    {
+        "id": 2,
+        "trip_id": 1,
+        "title": "Билеты на поезд",
+        "amount": 18000.0,
+        "category": "транспорт",
+        "date": "2026-11-03",
+        "payer_id": 2,
+        "split_between": [1, 2, 3]
+    },
+    {
+        "id": 3,
+        "trip_id": 1,
+        "title": "Ужин в ресторане",
+        "amount": 4500.0,
+        "category": "еда",
+        "date": "2026-11-04",
+        "payer_id": 3,
+        "split_between": [1, 2, 3]
+    },
+    {
+        "id": 4,
+        "trip_id": 1,
+        "title": "Экскурсия в Кремль",
+        "amount": 3000.0,
+        "category": "развлечения",
+        "date": "2026-11-05",
+        "payer_id": 2,
+        "split_between": [2, 3]
+    }
+]
