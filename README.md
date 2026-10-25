@@ -10,13 +10,17 @@
 
 Консольная версия приложения (ПР3) дополнена веб-интерфейсом на Django (ПР5):
 поездки, расходы и итоговый расчет можно просматривать в браузере.
+В ПР6 страницы переведены на шаблоны Django.
 
 ## Используемые технологии
 
 - Python 3;
 - Django 5.2 — веб-фреймворк;
-- HTML — разметка веб-страниц;
-- CSS и Bootstrap 5.3 (подключается через CDN) — оформление страниц;
+- Django Template Language — шаблоны страниц;
+- HTML5 — разметка веб-страниц;
+- CSS3 и Bootstrap 5.3 (подключается через CDN) — оформление страниц;
+- JavaScript — небольшое поведение интерфейса;
+- JSON — хранение данных;
 - pytest — автоматизированные тесты;
 - flake8 — проверка качества кода.
 
@@ -57,21 +61,33 @@
 - сохранение всех данных в JSON-файлах и загрузка при запуске;
 - обработка некорректного ввода и ошибок файлов без аварийного завершения.
 
-## Веб-интерфейс (ПР5)
+## Веб-интерфейс (ПР5–ПР6)
 
 Django добавлен к существующему проекту: `manage.py` лежит в корне
 репозитория рядом с `main.py`, а код ПР3 (пакет `models`, `storage.py`,
 JSON-файлы, тесты, консольное меню) сохранен и продолжает работать.
-Django-модели и база данных пока не используются: страницы строятся
-по объектам `Trip`, `Participant`, `Expense` и `Settlement`, которые
-`storage.py` загружает из JSON.
+Данные пока хранятся в JSON: Django ORM, Django-модели и база данных
+не используются, формы еще не реализованы. Страницы строятся по объектам
+`Trip`, `Participant`, `Expense` и `Settlement`, которые `storage.py`
+загружает из JSON.
+
+В ПР6 веб-интерфейс переведен на шаблоны Django (Django Template Language).
+View-функции больше не собирают HTML-строки: они загружают данные,
+готовят словарь контекста и вызывают `render()`, а HTML формирует шаблон.
+Функция `page()` из ПР5 удалена.
+
+```
+Было (ПР5):  view → content = f"""HTML""" → page() → HttpResponse
+Стало (ПР6): view → context → render() → шаблон страницы → base.html
+```
 
 ### Django-проект и приложения
 
 - `splitter/` — пакет конфигурации Django-проекта: `settings.py`
-  (приложения в `INSTALLED_APPS`, `LANGUAGE_CODE = "ru-RU"`,
+  (приложения в `INSTALLED_APPS`, каталог шаблонов проекта в
+  `TEMPLATES["DIRS"]`, `LANGUAGE_CODE = "ru-RU"`,
   `TIME_ZONE = "Europe/Moscow"`), корневой `urls.py`, `asgi.py`, `wsgi.py`;
-- `homepage` — главная страница, общий HTML-каркас `page()` и страница 404;
+- `homepage` — главная страница и статические файлы сайта;
 - `trips` — поездки: список, страница поездки с участниками и расходами,
   расчет «кто кому должен»;
 - `expenses` — расходы: список всех расходов и страница расхода.
@@ -83,40 +99,153 @@ Django-модели и база данных пока не используют�
 
 ### Страницы и URL
 
-| URL | View-функция | Страница |
-|---|---|---|
-| `/` | `homepage.views.index` | описание сервиса и навигация |
-| `/trips/` | `trips.views.trips` | список поездок с потраченной суммой и бюджетом |
-| `/trips/<int:trip_id>/` | `trips.views.trip_detail` | даты, контроль бюджета, участники и расходы поездки |
-| `/trips/<int:trip_id>/settlement/` | `trips.views.trip_settlement` | балансы участников и переводы |
-| `/expenses/` | `expenses.views.expenses` | все расходы по дате и общий итог |
-| `/expenses/<int:expense_id>/` | `expenses.views.expense_detail` | плательщик, участники и доля каждого |
+| URL | Имя маршрута | View-функция | Шаблон |
+|---|---|---|---|
+| `/` | `homepage:index` | `homepage.views.index` | `homepage/index.html` |
+| `/trips/` | `trips:list` | `trips.views.trips` | `trips/trip_list.html` |
+| `/trips/<int:trip_id>/` | `trips:detail` | `trips.views.trip_detail` | `trips/trip_detail.html` |
+| `/trips/<int:trip_id>/settlement/` | `trips:settlement` | `trips.views.trip_settlement` | `trips/trip_settlement.html` |
+| `/expenses/` | `expenses:list` | `expenses.views.expenses` | `expenses/expense_list.html` |
+| `/expenses/<int:expense_id>/` | `expenses:detail` | `expenses.views.expense_detail` | `expenses/expense_detail.html` |
 
 Маршрутизация двухуровневая: корневой `splitter/urls.py` подключает
-`homepage.urls`, `trips.urls` и `expenses.urls` через `include()`, а
-конкретные адреса описаны в `urls.py` приложений. Если поездка или расход
-с указанным номером не найдены, страница возвращает код 404. Для адресов
-без маршрута в корневом `urls.py` задан `handler404 =
-"homepage.views.page_not_found"` (собственная страница видна при
-`DEBUG = False`).
+`homepage.urls`, `trips.urls` и `expenses.urls` через `include()`.
+В `urls.py` каждого приложения задано пространство имен `app_name`
+(`homepage`, `trips`, `expenses`) и имена маршрутов, поэтому ссылки
+в шаблонах строятся тегом `{% url %}`, а не записываются адресами:
+
+```
+{% url 'trips:list' %}
+{% url 'trips:detail' trip.id %}
+{% url 'trips:settlement' trip.id %}
+{% url 'expenses:detail' expense.id %}
+```
+
+Если поездка или расход с указанным номером не найдены, view-функция
+передает в шаблон `None` и вызывает `render(..., status=404)`: шаблон
+через `{% if %}` / `{% else %}` выводит сообщение «Поездка не найдена»
+или «Расход не найден», а ответ имеет код 404. Для адресов без маршрута
+Django использует шаблон `templates/404.html` (виден при `DEBUG = False`).
+
+### Шаблоны
+
+```
+templates/                          # шаблоны уровня проекта
+├── base.html                       # общий каркас всех страниц
+├── 404.html                        # страница «404 – страница не найдена»
+└── includes/
+    └── navigation.html             # навигационная панель
+homepage/templates/homepage/
+└── index.html
+trips/templates/trips/
+├── trip_list.html
+├── trip_detail.html
+├── trip_settlement.html
+└── includes/
+    ├── trip_card.html              # карточка одной поездки
+    └── budget_badge.html           # отметка «потрачено из бюджета»
+expenses/templates/expenses/
+├── expense_list.html
+├── expense_detail.html
+└── includes/
+    └── category_badge.html         # отметка категории расхода
+```
+
+**Базовый шаблон и наследование.** `templates/base.html` содержит
+`<!DOCTYPE html>`, кодировку, `viewport`, подключение Bootstrap и
+собственного CSS, навигацию, основной контейнер, подвал и подключение
+JavaScript. Дочерние шаблоны начинаются с `{% extends "base.html" %}`
+и переопределяют блоки `{% block title %}` (заголовок вкладки) и
+`{% block content %}` (содержимое страницы).
+
+**Включаемые шаблоны.** Повторяющиеся фрагменты подключаются через
+`{% include %}`:
+
+- `includes/navigation.html` — навигация, подключается в `base.html`;
+  активный раздел подсвечивается по `request.resolver_match.app_name`;
+- `trips/includes/trip_card.html` — карточка поездки в списке поездок,
+  подключается с параметрами:
+  `{% include "trips/includes/trip_card.html" with trip=row.trip total=row.total budget_level=row.budget_level %}`;
+- `trips/includes/budget_badge.html` — цветная отметка бюджета
+  (в списке поездок и на странице поездки);
+- `expenses/includes/category_badge.html` — категория расхода
+  (в списке расходов, на странице расхода и в таблице расходов поездки).
+
+**Контекст.** View-функции передают данные словарем контекста, например
+в `trips.views.trips`:
+
+```python
+context = {
+    "trip_rows": trip_rows,   # [{"trip": Trip, "total": ..., "budget_level": ...}]
+}
+return render(request, "trips/trip_list.html", context)
+```
+
+В шаблоне к атрибутам объектов обращаются через точку:
+`{{ trip.name }}`, `{{ expense.payer.name }}`, `{{ expense.trip.name }}`.
+
+**Циклы и условия.** Списки выводятся циклом `{% for %}`, пустая
+коллекция обрабатывается веткой `{% empty %}` («Поездок пока нет»,
+«Участников нет», «Расходы не найдены.», «Переводы не нужны»). Переводы
+расчета перебираются с распаковкой кортежа:
+`{% for debtor, creditor, amount in transfers %}`. Условия `{% if %}`
+выбирают цвет отметки бюджета по `budget_level`, цвет баланса участника
+(`row.balance > 0`, `< 0`, `= 0`) и ветку «объект не найден».
+
+Уровень расходования бюджета вычисляет метод `Trip.budget_level(total)`
+(добавлен в ПР6): `none`, `ok`, `warning` (80% и больше) или `over`.
+Логика остается в классе предметной области, а шаблон только выбирает
+по уровню CSS-класс.
+
+### Фильтры шаблонов
+
+Фильтры применяются для представления данных и не содержат бизнес-логику:
+
+| Фильтр | Где | Что делает |
+|---|---|---|
+| `length` | `{{ trip_rows\|length }}`, `{{ participants\|length }}`, `{{ expenses\|length }}` | количество поездок, участников, расходов |
+| `default` | `{{ trip.name\|default:"Без названия" }}` | значение, если название пустое |
+| `date` | `{{ trip.start_date\|date:"d.m.Y" }}` | дата в формате 03.11.2026 |
+| `floatformat` | `{{ expense.amount\|floatformat:"2g" }} ₽` | сумма с двумя знаками и разделением разрядов: 25 500,00 ₽ |
+| `capfirst` | `{{ expense.category\|capfirst }}` | категория с заглавной буквы |
+
+### Статические файлы
+
+Собственные статические файлы лежат в приложении `homepage`:
+
+```
+homepage/static/homepage/
+├── css/style.css      # собственные стили: карточки поездок, отметки, подвал
+├── js/main.js         # выводит текущий год в подвале
+└── img/logo.png       # логотип сервиса: чемодан и монета
+```
+
+`base.html` и `navigation.html` начинаются с `{% load static %}` и
+подключают файлы тегом `{% static %}`:
+
+```
+{% static 'homepage/css/style.css' %}
+{% static 'homepage/img/logo.png' %}
+{% static 'homepage/js/main.js' %}
+```
+
+Bootstrap 5.3 подключается через CDN и отвечает за базовую верстку;
+собственный CSS оформляет классы проекта `.trip-card`, `.budget-badge`,
+`.balance-badge`, `.category-badge`, `.splitter-logo`, `.site-footer`.
+Найти файл можно командой `python manage.py findstatic homepage/img/logo.png`.
 
 ### View-функции
 
 View-функции не дублируют логику ПР3, а вызывают ее:
 
 - `storage.load_all()` загружает поездки, участников и расходы со связями;
-- `find_trip_by_id()` и `find_expense_by_id()` (добавлена в ПР5) находят
-  объект по номеру из URL;
-- `get_trip_participants()`, `iter_trip_expenses()`, `get_total()`,
-  `Trip.check_budget()` дают данные страницы поездки;
+- `find_trip_by_id()` и `find_expense_by_id()` находят объект по номеру
+  из URL;
+- `sort_trips()`, `sort_expenses()`, `get_trip_participants()`,
+  `iter_trip_expenses()`, `get_total()`, `Trip.check_budget()`,
+  `Trip.budget_level()` дают данные страниц поездок и расходов;
 - `Settlement.get_balances()`, `get_transfers()` и
   `get_settlement_status()` формируют страницу расчета.
-
-HTML собирается функцией `page(title, content)` из `homepage/views.py`:
-она добавляет `<!DOCTYPE html>`, кодировку, `viewport`, заголовок вкладки,
-подключение Bootstrap и навигационную панель. Используются компоненты
-Bootstrap `navbar`, `card`, `list-group`, `table`, `badge`, `btn` и сетка
-`row`/`col-md-*`. На следующем этапе `page()` заменят шаблоны Django.
 
 Отложены до появления форм и POST-запросов: создание поездки, добавление
 участника, добавление и удаление расхода, отбор расходов по категории.
@@ -135,6 +264,8 @@ Bootstrap `navbar`, `card`, `list-group`, `table`, `badge`, `btn` и сетка
 
 - `duration` — длительность поездки в днях (свойство, `@property`);
 - `check_budget(total_amount)` — сравнение суммы расходов с бюджетом;
+- `budget_level(total_amount)` — уровень расходования бюджета для
+  отметки в веб-интерфейсе (ПР6);
 - `validate_dates(start_date, end_date)` — проверка дат (`@staticmethod`),
   конструктор не создает поездку, которая заканчивается раньше начала;
 - `__str__()` — «Поездка в Казань: 03.11.2026 – 06.11.2026 (4 дн.), бюджет 60000.00 ₽».
@@ -224,19 +355,42 @@ trip-expense-splitter/
 ├── storage.py              # JSON ↔ объекты
 ├── utils.py                # разбор сумм и дат, безопасный ввод
 ├── splitter/               # конфигурация Django-проекта
-│   ├── settings.py
-│   ├── urls.py             # корневые маршруты и handler404
+│   ├── settings.py         # TEMPLATES["DIRS"] = [BASE_DIR / "templates"]
+│   ├── urls.py             # корневые маршруты
 │   ├── asgi.py
 │   └── wsgi.py
-├── homepage/               # Django-приложение: главная, page(), 404
+├── templates/              # шаблоны уровня проекта
+│   ├── base.html
+│   ├── 404.html
+│   └── includes/
+│       └── navigation.html
+├── homepage/               # Django-приложение: главная и статика
+│   ├── static/homepage/
+│   │   ├── css/style.css
+│   │   ├── js/main.js
+│   │   └── img/logo.png
+│   ├── templates/homepage/
+│   │   └── index.html
 │   ├── urls.py
 │   ├── views.py
 │   └── tests.py
 ├── trips/                  # Django-приложение: поездки и расчет
+│   ├── templates/trips/
+│   │   ├── trip_list.html
+│   │   ├── trip_detail.html
+│   │   ├── trip_settlement.html
+│   │   └── includes/
+│   │       ├── trip_card.html
+│   │       └── budget_badge.html
 │   ├── urls.py
 │   ├── views.py
 │   └── tests.py
 ├── expenses/               # Django-приложение: расходы
+│   ├── templates/expenses/
+│   │   ├── expense_list.html
+│   │   ├── expense_detail.html
+│   │   └── includes/
+│   │       └── category_badge.html
 │   ├── urls.py
 │   ├── views.py
 │   └── tests.py
@@ -310,6 +464,10 @@ trip-expense-splitter/
 - **ПР5** — Django-проект `splitter` и приложения `homepage`, `trips`,
   `expenses`: маршрутизация URL, view-функции, страницы на HTML и
   Bootstrap с данными объектов ПР3, собственная страница 404.
+- **ПР6** — шаблоны Django: базовый шаблон `base.html` и наследование,
+  блоки, включаемые шаблоны, передача данных через контекст, циклы и
+  условия, именованные URL с пространствами имен, фильтры, собственные
+  CSS, JavaScript и логотип; функция `page()` удалена.
 
 ## Требования
 
@@ -361,29 +519,30 @@ python main.py
 
 ```bash
 pytest -v                  # тесты предметной области (ПР1–ПР3)
-python manage.py test      # тесты веб-страниц (ПР5)
+python manage.py test      # тесты веб-страниц (ПР5–ПР6)
 ```
 
 Тесты проверяют создание объектов и значения атрибутов, методы и `__str__`
 классов, поиск, отбор и сортировку коллекций, связь расхода с поездкой
 и участниками, расчет балансов и переводов, сохранение объектов в JSON
 и восстановление связей при загрузке. Тесты Django-приложений проверяют,
-что каждая страница открывается, показывает данные из JSON и возвращает
-404 для несуществующих номеров и адресов.
+что каждая страница открывается нужным шаблоном, показывает данные из JSON,
+подключает статические файлы, что имена маршрутов дают правильные адреса
+и что для несуществующих номеров и адресов возвращается 404.
 
 ## Проверка качества кода
 
 ```bash
-flake8 .
+flake8 . --extend-exclude=venv
 ```
 
 ## План развития
 
 На следующих этапах планируется:
 
-- переход на шаблоны Django (`templates/`) вместо функции `page()`;
-- перенос `Trip`, `Participant` и `Expense` в Django ORM и подключение базы данных;
-- формы создания поездок, участников и расходов;
+- перенос `Trip`, `Participant` и `Expense` в Django ORM и подключение базы
+  данных вместо JSON-файлов;
+- формы Django для создания поездок, участников и расходов;
 - реализация пользователей, регистрации и разграничения доступа к поездкам;
 - разработка REST API;
 - контейнеризация приложения в Docker;
