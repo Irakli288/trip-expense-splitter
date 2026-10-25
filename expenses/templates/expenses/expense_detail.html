@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}
+    {% if expense %}
+        {{ expense.title }} – Сервис расходов поездки
+    {% else %}
+        Расход не найден – Сервис расходов поездки
+    {% endif %}
+{% endblock %}
+
+{% block content %}
+    {% if expense %}
+        <div class="card">
+            <div class="card-body">
+                <h1 class="card-title h3">{{ expense.title }}</h1>
+                <p class="card-text">
+                    <strong>Поездка:</strong>
+                    <a href="{% url 'trips:detail' expense.trip.id %}">
+                        {{ expense.trip.name }}
+                    </a>
+                </p>
+                <p class="card-text">
+                    <strong>Сумма:</strong> {{ expense.amount|floatformat:"2g" }} ₽
+                    {% include "expenses/includes/category_badge.html" %}
+                </p>
+                <p class="card-text">
+                    <strong>Дата:</strong> {{ expense.date|date:"d.m.Y" }}
+                </p>
+                <p class="card-text">
+                    <strong>Оплатил:</strong> {{ expense.payer.name }}
+                </p>
+                <p class="card-text">
+                    <strong>Делится между:</strong>
+                    {% for person in expense.split_between %}{{ person.name }}{% if not forloop.last %}, {% endif %}{% endfor %}
+                    (по {{ expense.share|floatformat:"2g" }} ₽ с каждого)
+                </p>
+                <a href="{% url 'expenses:list' %}" class="btn btn-outline-secondary">
+                    ← к списку расходов
+                </a>
+            </div>
+        </div>
+    {% else %}
+        <h1 class="text-danger">Расход не найден</h1>
+        <p>Расход с указанным номером отсутствует.</p>
+        <a href="{% url 'expenses:list' %}" class="btn btn-outline-secondary">
+            ← к списку расходов
+        </a>
+    {% endif %}
+{% endblock %}
