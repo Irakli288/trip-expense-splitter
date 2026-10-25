@@ -24,5 +24,3 @@ urlpatterns = [
     path("trips/", include("trips.urls")),
     path("expenses/", include("expenses.urls")),
 ]
-
-handler404 = "homepage.views.page_not_found"

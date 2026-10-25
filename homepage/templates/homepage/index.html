@@ -9,6 +9,6 @@
         кто кому сколько должен перевести.
     </p>
     <p>Основные разделы:</p>
-    <a href="/trips/" class="btn btn-primary me-2">Поездки</a>
-    <a href="/expenses/" class="btn btn-secondary">Расходы</a>
+    <a href="{% url 'trips:list' %}" class="btn btn-primary me-2">Поездки</a>
+    <a href="{% url 'expenses:list' %}" class="btn btn-secondary">Расходы</a>
 {% endblock %}

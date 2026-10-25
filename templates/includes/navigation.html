@@ -1,0 +1,10 @@
+<nav class="navbar navbar-expand bg-primary mb-4" data-bs-theme="dark">
+    <div class="container">
+        <a class="navbar-brand" href="{% url 'homepage:index' %}">Сервис расходов поездки</a>
+        <div class="navbar-nav">
+            <a class="nav-link {% if request.resolver_match.app_name == 'homepage' %}active{% endif %}" href="{% url 'homepage:index' %}">Главная</a>
+            <a class="nav-link {% if request.resolver_match.app_name == 'trips' %}active{% endif %}" href="{% url 'trips:list' %}">Поездки</a>
+            <a class="nav-link {% if request.resolver_match.app_name == 'expenses' %}active{% endif %}" href="{% url 'expenses:list' %}">Расходы</a>
+        </div>
+    </div>
+</nav>
