@@ -169,3 +169,14 @@ def save_expenses(
         }
         for item in expenses
     ])
+
+
+def load_all() -> tuple[list[Trip], list[Participant], list[Expense]]:
+    """Загрузить поездки, участников и расходы со связями (для ПР5).
+
+    Используется view-функциями Django: каждая страница получает
+    коллекции объектов так же, как консольное меню main.py.
+    """
+    trips = load_trips()
+    participants = load_participants(trips)
+    return trips, participants, load_expenses(trips, participants)

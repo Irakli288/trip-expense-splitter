@@ -100,6 +100,17 @@ def add_expense(
     return expense
 
 
+def find_expense_by_id(
+    expenses: list[Expense],
+    expense_id: int,
+) -> Expense | None:
+    """Вернуть расход с указанным номером или None (добавлена в ПР5)."""
+    for expense in expenses:
+        if expense.id == expense_id:
+            return expense
+    return None
+
+
 def delete_expense(
     expenses: list[Expense],
     trip: Trip,

@@ -8,6 +8,7 @@ from models.expenses import (
     calculate_share,
     delete_expense,
     filter_by_category,
+    find_expense_by_id,
     get_totals_by_category,
     iter_trip_expenses,
     sort_expenses,
@@ -62,6 +63,13 @@ def test_add_and_delete_expense(trip, people):
     assert list(iter_trip_expenses(expenses, trip)) == [expense]
     assert delete_expense(expenses, trip, 1) is expense
     assert expenses == []
+
+
+def test_find_expense_by_id(trip, people):
+    expenses = []
+    expense = add_expense(expenses, trip, "Ужин", 4500, people[2], people)
+    assert find_expense_by_id(expenses, 1) is expense
+    assert find_expense_by_id(expenses, 99) is None
 
 
 def test_delete_missing_expense(trip):
