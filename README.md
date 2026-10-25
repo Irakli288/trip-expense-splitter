@@ -10,7 +10,8 @@
 
 Консольная версия приложения (ПР3) дополнена веб-интерфейсом на Django (ПР5):
 поездки, расходы и итоговый расчет можно просматривать в браузере.
-В ПР6 страницы переведены на шаблоны Django.
+В ПР6 страницы переведены на шаблоны Django. В ПР7 данные перенесены
+из JSON в базу SQLite: страницы сайта получают их SQL-запросами.
 
 ## Используемые технологии
 
@@ -20,7 +21,9 @@
 - HTML5 — разметка веб-страниц;
 - CSS3 и Bootstrap 5.3 (подключается через CDN) — оформление страниц;
 - JavaScript — небольшое поведение интерфейса;
-- JSON — хранение данных;
+- SQLite и модуль `sqlite3` стандартной библиотеки — база данных (ПР7);
+- SQL — выборка и обработка данных;
+- JSON — исходные данные и хранение консольной версии;
 - pytest — автоматизированные тесты;
 - flake8 — проверка качества кода.
 
@@ -59,6 +62,10 @@
 - контроль бюджета поездки (предупреждение при 80% и при превышении);
 - расчет баланса каждого участника и списка переводов «кто → кому → сколько»;
 - сохранение всех данных в JSON-файлах и загрузка при запуске;
+- перенос данных из JSON в базу SQLite и работа веб-страниц с базой (ПР7);
+- поиск расходов по поездке, категории и минимальной сумме;
+- статистика: итоги по категориям, кто сколько оплатил, крупные категории,
+  поездки с почти исчерпанным бюджетом;
 - обработка некорректного ввода и ошибок файлов без аварийного завершения.
 
 ## Веб-интерфейс (ПР5–ПР6)
@@ -66,10 +73,10 @@
 Django добавлен к существующему проекту: `manage.py` лежит в корне
 репозитория рядом с `main.py`, а код ПР3 (пакет `models`, `storage.py`,
 JSON-файлы, тесты, консольное меню) сохранен и продолжает работать.
-Данные пока хранятся в JSON: Django ORM, Django-модели и база данных
-не используются, формы еще не реализованы. Страницы строятся по объектам
-`Trip`, `Participant`, `Expense` и `Settlement`, которые `storage.py`
-загружает из JSON.
+До ПР7 страницы строились по объектам `Trip`, `Participant`, `Expense`
+и `Settlement`, которые `storage.py` загружал из JSON. С ПР7 страницы
+получают данные из базы SQLite (раздел «База данных SQLite (ПР7)»).
+Django ORM и Django-модели пока не используются, формы еще не реализованы.
 
 В ПР6 веб-интерфейс переведен на шаблоны Django (Django Template Language).
 View-функции больше не собирают HTML-строки: они загружают данные,
@@ -106,6 +113,7 @@ View-функции больше не собирают HTML-строки: они
 | `/trips/<int:trip_id>/` | `trips:detail` | `trips.views.trip_detail` | `trips/trip_detail.html` |
 | `/trips/<int:trip_id>/settlement/` | `trips:settlement` | `trips.views.trip_settlement` | `trips/trip_settlement.html` |
 | `/expenses/` | `expenses:list` | `expenses.views.expenses` | `expenses/expense_list.html` |
+| `/expenses/statistics/` | `expenses:statistics` | `expenses.views.statistics` | `expenses/statistics.html` |
 | `/expenses/<int:expense_id>/` | `expenses:detail` | `expenses.views.expense_detail` | `expenses/expense_detail.html` |
 
 Маршрутизация двухуровневая: корневой `splitter/urls.py` подключает
@@ -147,6 +155,7 @@ trips/templates/trips/
 expenses/templates/expenses/
 ├── expense_list.html
 ├── expense_detail.html
+├── statistics.html                 # статистика расходов (ПР7)
 └── includes/
     └── category_badge.html         # отметка категории расхода
 ```
@@ -162,27 +171,28 @@ JavaScript. Дочерние шаблоны начинаются с `{% extends 
 `{% include %}`:
 
 - `includes/navigation.html` — навигация, подключается в `base.html`;
-  активный раздел подсвечивается по `request.resolver_match.app_name`;
+  активный раздел подсвечивается по `request.resolver_match.app_name`
+  (для статистики — по `request.resolver_match.view_name`);
 - `trips/includes/trip_card.html` — карточка поездки в списке поездок,
-  подключается с параметрами:
-  `{% include "trips/includes/trip_card.html" with trip=row.trip total=row.total budget_level=row.budget_level %}`;
+  подключается в цикле `{% for trip in trips %}` и получает строку
+  результата SQL-запроса как переменную `trip`;
 - `trips/includes/budget_badge.html` — цветная отметка бюджета
   (в списке поездок и на странице поездки);
 - `expenses/includes/category_badge.html` — категория расхода
-  (в списке расходов, на странице расхода и в таблице расходов поездки).
+  (в списке расходов, на странице расхода, в таблице расходов поездки);
+  на странице статистики подключается с параметром:
+  `{% include "expenses/includes/category_badge.html" with expense=item %}`.
 
 **Контекст.** View-функции передают данные словарем контекста, например
-в `trips.views.trips`:
+в `trips.views.trips` (ПР7):
 
 ```python
-context = {
-    "trip_rows": trip_rows,   # [{"trip": Trip, "total": ..., "budget_level": ...}]
-}
-return render(request, "trips/trip_list.html", context)
+trips_data = conn.execute(TRIPS_QUERY).fetchall()   # строки sqlite3.Row
+return render(request, "trips/trip_list.html", {"trips": trips_data})
 ```
 
-В шаблоне к атрибутам объектов обращаются через точку:
-`{{ trip.name }}`, `{{ expense.payer.name }}`, `{{ expense.trip.name }}`.
+В шаблоне к полям строки результата обращаются по имени столбца через
+точку: `{{ trip.name }}`, `{{ trip.total }}`, `{{ expense.payer_name }}`.
 
 **Циклы и условия.** Списки выводятся циклом `{% for %}`, пустая
 коллекция обрабатывается веткой `{% empty %}` («Поездок пока нет»,
@@ -192,10 +202,10 @@ return render(request, "trips/trip_list.html", context)
 выбирают цвет отметки бюджета по `budget_level`, цвет баланса участника
 (`row.balance > 0`, `< 0`, `= 0`) и ветку «объект не найден».
 
-Уровень расходования бюджета вычисляет метод `Trip.budget_level(total)`
-(добавлен в ПР6): `none`, `ok`, `warning` (80% и больше) или `over`.
-Логика остается в классе предметной области, а шаблон только выбирает
-по уровню CSS-класс.
+Уровень расходования бюджета — `none`, `ok`, `warning` (80% и больше)
+или `over`. В ПР6 его вычислял метод `Trip.budget_level(total)`, с ПР7
+для страниц сайта то же правило записано в SQL-запросе выражением
+`CASE ... END AS budget_level`; шаблон только выбирает по уровню CSS-класс.
 
 ### Фильтры шаблонов
 
@@ -203,9 +213,9 @@ return render(request, "trips/trip_list.html", context)
 
 | Фильтр | Где | Что делает |
 |---|---|---|
-| `length` | `{{ trip_rows\|length }}`, `{{ participants\|length }}`, `{{ expenses\|length }}` | количество поездок, участников, расходов |
+| `length` | `{{ trips\|length }}`, `{{ participants\|length }}`, `{{ expenses\|length }}` | количество поездок, участников, расходов |
 | `default` | `{{ trip.name\|default:"Без названия" }}` | значение, если название пустое |
-| `date` | `{{ trip.start_date\|date:"d.m.Y" }}` | дата в формате 03.11.2026 |
+| `date` | в ПР6 `{{ trip.start_date\|date:"d.m.Y" }}`; с ПР7 дату форматирует SQL: `strftime('%d.%m.%Y', start_date)` | дата в формате 03.11.2026 |
 | `floatformat` | `{{ expense.amount\|floatformat:"2g" }} ₽` | сумма с двумя знаками и разделением разрядов: 25 500,00 ₽ |
 | `capfirst` | `{{ expense.category\|capfirst }}` | категория с заглавной буквы |
 
@@ -236,20 +246,198 @@ Bootstrap 5.3 подключается через CDN и отвечает за �
 
 ### View-функции
 
-View-функции не дублируют логику ПР3, а вызывают ее:
-
-- `storage.load_all()` загружает поездки, участников и расходы со связями;
-- `find_trip_by_id()` и `find_expense_by_id()` находят объект по номеру
-  из URL;
-- `sort_trips()`, `sort_expenses()`, `get_trip_participants()`,
-  `iter_trip_expenses()`, `get_total()`, `Trip.check_budget()`,
-  `Trip.budget_level()` дают данные страниц поездок и расходов;
-- `Settlement.get_balances()`, `get_transfers()` и
-  `get_settlement_status()` формируют страницу расчета.
+В ПР5–ПР6 view-функции вызывали `storage.load_all()` и функции ПР3
+(`find_trip_by_id()`, `sort_trips()`, `iter_trip_expenses()`,
+`get_total()` и др.). В ПР7 поиск, отбор, сортировка и подсчет итогов
+перенесены в SQL-запросы (см. раздел «База данных SQLite (ПР7)»).
+Расчет «кто кому должен» по-прежнему выполняет класс `Settlement`:
+view-функция `trip_settlement` строит объекты `Trip`, `Participant`
+и `Expense` из строк SQLite и вызывает `get_balances()` и
+`get_transfers()`.
 
 Отложены до появления форм и POST-запросов: создание поездки, добавление
-участника, добавление и удаление расхода, отбор расходов по категории.
-Эти операции по-прежнему доступны в консольной версии.
+участника, добавление и удаление расхода. Эти операции по-прежнему
+доступны в консольной версии.
+
+## База данных SQLite (ПР7)
+
+Данные проекта перенесены из JSON-файлов в базу SQLite
+`data/splitter.sqlite`. Работа с базой выполняется модулем `sqlite3`
+стандартной библиотеки Python, без Django ORM.
+
+```
+До ПР7:    JSON → storage.py → объекты Python → Django view → шаблон
+После ПР7: SQLite → SQL-запрос → sqlite3 → Django view → context → шаблон
+```
+
+JSON-файлы и консольная версия (`main.py`) сохранены: JSON остается
+исходными данными, из которых заполняется база.
+
+### Структура базы данных
+
+**trips** — поездки:
+
+| Поле | Тип | Ограничения | Назначение |
+|---|---|---|---|
+| `id` | INTEGER | PRIMARY KEY | номер поездки |
+| `name` | TEXT | NOT NULL | название |
+| `start_date` | TEXT | NOT NULL | дата начала, `YYYY-MM-DD` |
+| `end_date` | TEXT | NOT NULL, `start_date <= end_date` | дата окончания |
+| `budget` | REAL | может быть NULL | бюджет; NULL — бюджет не задан |
+
+**participants** — участники:
+
+| Поле | Тип | Ограничения | Назначение |
+|---|---|---|---|
+| `id` | INTEGER | PRIMARY KEY | номер участника |
+| `trip_id` | INTEGER | NOT NULL, FOREIGN KEY → `trips.id` | поездка участника |
+| `name` | TEXT | NOT NULL | имя |
+
+**expenses** — расходы:
+
+| Поле | Тип | Ограничения | Назначение |
+|---|---|---|---|
+| `id` | INTEGER | PRIMARY KEY | номер расхода |
+| `trip_id` | INTEGER | NOT NULL, FOREIGN KEY → `trips.id` | поездка |
+| `title` | TEXT | NOT NULL | название расхода |
+| `amount` | REAL | NOT NULL, `amount > 0` | сумма |
+| `category` | TEXT | NOT NULL, DEFAULT `'прочее'`, одна из 5 категорий | категория |
+| `expense_date` | TEXT | NOT NULL | дата, `YYYY-MM-DD` |
+| `payer_id` | INTEGER | NOT NULL, FOREIGN KEY → `participants.id` | кто оплатил |
+
+**expense_shares** — доли расходов (между кем делится расход):
+
+| Поле | Тип | Ограничения | Назначение |
+|---|---|---|---|
+| `expense_id` | INTEGER | NOT NULL, FOREIGN KEY → `expenses.id` | расход |
+| `participant_id` | INTEGER | NOT NULL, FOREIGN KEY → `participants.id` | участник |
+
+Первичный ключ `expense_shares` составной: `(expense_id, participant_id)` —
+один участник входит в расход один раз. Таблица заменяет список
+`split_between` из JSON и реализует связь «многие ко многим» между
+расходами и участниками. Расчет (`Settlement`) в базе не хранится:
+он вычисляется по расходам и долям.
+
+```
+trips 1 ──< participants
+trips 1 ──< expenses >── 1 participants   (payer_id)
+expenses 1 ──< expense_shares >── 1 participants
+```
+
+### Файлы слоя базы данных
+
+| Файл | Назначение |
+|---|---|
+| `sql/schema.sql` | команды `CREATE TABLE IF NOT EXISTS` с ключами и ограничениями |
+| `sql/queries.sql` | 17 проверенных SQL-запросов проекта с комментариями |
+| `db/database.py` | `get_connection()`: подключение и `PRAGMA foreign_keys = ON`; `create_tables()` |
+| `db/import_json.py` | перенос данных из JSON: `executemany()`, параметры `?`, `commit()` / `rollback()` |
+| `db/testing.py` | временная база для тестов Django-страниц |
+| `data/splitter.sqlite` | файл базы данных |
+
+### Создание базы и перенос данных
+
+```bash
+python -m db.import_json
+```
+
+Скрипт создает таблицы по `sql/schema.sql` (если их еще нет), очищает их
+и заново заполняет записями из `trips.json`, `participants.json` и
+`expenses.json`, поэтому его можно запускать повторно. При ошибке
+изменения откатываются (`rollback()`). Проверка в SQLite CLI:
+
+```
+sqlite3 data/splitter.sqlite
+sqlite> .tables
+expense_shares  expenses  participants  trips
+sqlite> SELECT COUNT(*) FROM expenses;
+6
+sqlite> PRAGMA foreign_key_list(expenses);
+```
+
+Все запросы файла можно выполнить разом:
+`sqlite3 -header -column data/splitter.sqlite < sql/queries.sql`.
+
+### SQL-запросы (`sql/queries.sql`)
+
+| № | Запрос | Элементы SQL | Где используется |
+|---|---|---|---|
+| 1 | список поездок | SELECT, ORDER BY | форма поиска `/expenses/` |
+| 2 | участники поездки | WHERE `trip_id = ?` | `/trips/<id>/`, расчет |
+| 3 | три самых крупных расхода | JOIN, ORDER BY, LIMIT | `/expenses/statistics/` |
+| 4 | поиск расходов по поездке, категории, сумме | JOIN, WHERE с параметрами | `/expenses/` |
+| 5 | количество и сумма найденных расходов | COUNT, SUM, WHERE | `/expenses/` |
+| 6 | участники, которые еще ничего не оплачивали | WHERE, подзапрос NOT IN | `/trips/<id>/` |
+| 7 | расходы поездки с плательщиком | JOIN, WHERE | `/trips/<id>/`, расчет |
+| 8 | расход с поездкой и плательщиком | JOIN, WHERE `id = ?` | `/expenses/<id>/` |
+| 9 | участники, между которыми делится расход | JOIN, WHERE | `/expenses/<id>/` |
+| 10 | доли всех расходов поездки | JOIN, WHERE | расчет `/trips/<id>/settlement/` |
+| 11 | сводка: поездки, участники, расходы, сумма | COUNT, SUM, MAX | главная `/` |
+| 12 | поездки с числом участников, суммой и уровнем бюджета | LEFT JOIN, GROUP BY, SUM, CASE | `/trips/` |
+| 13 | одна поездка с итогами и процентом бюджета | LEFT JOIN, WHERE, GROUP BY | `/trips/<id>/` |
+| 14 | итоги по категориям | GROUP BY, COUNT, SUM, AVG, MAX | `/expenses/statistics/` |
+| 15 | сколько оплатил каждый участник | JOIN, LEFT JOIN, GROUP BY | `/expenses/statistics/` |
+| 16 | категории с суммой не меньше заданной | GROUP BY, HAVING `>= ?` | `/expenses/statistics/` |
+| 17 | поездки, израсходовавшие 80% бюджета и больше | JOIN, GROUP BY, HAVING | `/expenses/statistics/` |
+
+Пример запроса с соединением таблиц и группировкой (запрос 15):
+
+```sql
+SELECT
+    participants.name AS participant_name,
+    trips.name AS trip_name,
+    COUNT(expenses.id) AS expenses_count,
+    COALESCE(SUM(expenses.amount), 0) AS paid_total
+FROM participants
+JOIN trips
+    ON participants.trip_id = trips.id
+LEFT JOIN expenses
+    ON expenses.payer_id = participants.id
+GROUP BY participants.id
+ORDER BY paid_total DESC, participants.name;
+```
+
+### Получение данных в Django-представлениях
+
+Каждая view-функция открывает соединение через `get_connection()`,
+настраивает `conn.row_factory = sqlite3.Row`, выполняет запрос и передает
+результат в шаблон через контекст. Благодаря `sqlite3.Row` к полям
+обращаются по имени: `row["total"]` в Python и `{{ trip.total }}`
+в шаблоне.
+
+```python
+def trip_detail(request, trip_id):
+    conn = get_connection()
+    conn.row_factory = sqlite3.Row
+    try:
+        trip = conn.execute(TRIP_QUERY, [trip_id]).fetchone()
+        ...
+    finally:
+        conn.close()
+```
+
+Значения из URL и формы (номер поездки, категория, сумма) передаются
+только параметрами `?`, например
+`conn.execute(EXPENSES_QUERY, [trip_id, trip_id, category, category, min_amount])`.
+Конкатенация строк и f-строки для подстановки значений в SQL
+не используются. Некорректные значения параметров (`?trip=abc`,
+отрицательная сумма, неизвестная категория) заменяются значениями
+по умолчанию.
+
+### Страницы с данными из SQLite
+
+| Страница | Что показывает | Запросы |
+|---|---|---|
+| Главная `/` | сводка: поездки, участники, расходы, сумма | 11 |
+| Поездки `/trips/` | карточки поездок с итогами и отметкой бюджета | 12 |
+| Поездка `/trips/<id>/` | бюджет, участники, расходы, кто еще не платил | 2, 6, 7, 13 |
+| Расчет `/trips/<id>/settlement/` | балансы и переводы (класс `Settlement`) | 2, 7, 10 |
+| Расходы `/expenses/` | поиск по поездке, категории и сумме, итог | 1, 4, 5 |
+| Расход `/expenses/<id>/` | плательщик, участники, доля каждого | 8, 9 |
+| Статистика `/expenses/statistics/` | категории, плательщики, крупные расходы и категории, бюджет | 3, 14–17 |
+
+Навигация: Главная | Поездки | Расходы | Статистика. Все ссылки
+строятся тегом `{% url %}`; SQL-запросы в интерфейсе не показываются.
 
 ## Объектная модель (ПР3)
 
@@ -353,6 +541,14 @@ trip-expense-splitter/
 ├── manage.py               # управление Django-проектом
 ├── main.py                 # консольная версия: точка запуска и меню
 ├── storage.py              # JSON ↔ объекты
+├── db/                     # слой базы данных SQLite (ПР7)
+│   ├── __init__.py
+│   ├── database.py         # подключение к базе
+│   ├── import_json.py      # перенос данных из JSON в базу
+│   └── testing.py          # временная база для тестов страниц
+├── sql/
+│   ├── schema.sql          # создание таблиц
+│   └── queries.sql         # SQL-запросы проекта
 ├── utils.py                # разбор сумм и дат, безопасный ввод
 ├── splitter/               # конфигурация Django-проекта
 │   ├── settings.py         # TEMPLATES["DIRS"] = [BASE_DIR / "templates"]
@@ -389,6 +585,7 @@ trip-expense-splitter/
 │   ├── templates/expenses/
 │   │   ├── expense_list.html
 │   │   ├── expense_detail.html
+│   │   ├── statistics.html
 │   │   └── includes/
 │   │       └── category_badge.html
 │   ├── urls.py
@@ -403,19 +600,21 @@ trip-expense-splitter/
 ├── data/
 │   ├── trips.json
 │   ├── participants.json
-│   └── expenses.json
+│   ├── expenses.json
+│   └── splitter.sqlite     # база данных SQLite (ПР7)
 └── tests/
     ├── conftest.py         # общие объекты для тестов
     ├── test_trips.py
     ├── test_participants.py
     ├── test_expenses.py
     ├── test_settlement.py
-    └── test_storage.py
+    ├── test_storage.py
+    └── test_database.py    # схема, перенос данных, запросы (ПР7)
 ```
 
-## Формат данных
+## Формат данных JSON
 
-Данные хранятся в каталоге `data/` в виде списков записей. Формат файлов
+Исходные данные хранятся в каталоге `data/` в виде списков записей. Формат файлов
 не изменился по сравнению с ПР2. При загрузке `storage.py` превращает записи
 в объекты и восстанавливает связи: по `trip_id` находит объект `Trip`,
 по `payer_id` и `split_between` — объекты `Participant`. При сохранении
@@ -468,6 +667,11 @@ trip-expense-splitter/
   блоки, включаемые шаблоны, передача данных через контекст, циклы и
   условия, именованные URL с пространствами имен, фильтры, собственные
   CSS, JavaScript и логотип; функция `page()` удалена.
+- **ПР7** — база данных SQLite: таблицы `trips`, `participants`,
+  `expenses`, `expense_shares` с первичными и внешними ключами
+  (`sql/schema.sql`), перенос данных из JSON (`db/import_json.py`),
+  17 SQL-запросов (`sql/queries.sql`), страницы сайта получают данные
+  SQL-запросами через `sqlite3`, поиск расходов и страница статистики.
 
 ## Требования
 
@@ -489,10 +693,14 @@ pip install -r requirements.txt
 Веб-версия (Django):
 
 ```bash
+python -m db.import_json      # создать базу SQLite и перенести данные JSON
 python manage.py migrate      # служебные таблицы Django, один раз
 python manage.py check
 python manage.py runserver
 ```
+
+База `data/splitter.sqlite` уже лежит в репозитории; `python -m db.import_json`
+нужен, чтобы пересоздать ее данные после изменения JSON-файлов.
 
 После запуска открыть в браузере http://127.0.0.1:8000/.
 
@@ -518,15 +726,19 @@ python main.py
 ## Запуск тестов
 
 ```bash
-pytest -v                  # тесты предметной области (ПР1–ПР3)
-python manage.py test      # тесты веб-страниц (ПР5–ПР6)
+pytest -v                  # тесты предметной области (ПР1–ПР3) и базы (ПР7)
+python manage.py test      # тесты веб-страниц (ПР5–ПР7)
 ```
 
 Тесты проверяют создание объектов и значения атрибутов, методы и `__str__`
 классов, поиск, отбор и сортировку коллекций, связь расхода с поездкой
 и участниками, расчет балансов и переводов, сохранение объектов в JSON
-и восстановление связей при загрузке. Тесты Django-приложений проверяют,
-что каждая страница открывается нужным шаблоном, показывает данные из JSON,
+и восстановление связей при загрузке. Тесты базы (`tests/test_database.py`)
+создают временную базу, проверяют таблицы, внешние ключи и ограничения,
+перенос данных из JSON, повторный импорт и выполнение всех запросов
+из `sql/queries.sql`. Тесты Django-приложений работают с временной базой
+SQLite и проверяют, что каждая страница открывается нужным шаблоном,
+показывает данные из базы (итоги, поиск, статистику, HAVING с параметром),
 подключает статические файлы, что имена маршрутов дают правильные адреса
 и что для несуществующих номеров и адресов возвращается 404.
 
@@ -540,8 +752,8 @@ flake8 . --extend-exclude=venv
 
 На следующих этапах планируется:
 
-- перенос `Trip`, `Participant` и `Expense` в Django ORM и подключение базы
-  данных вместо JSON-файлов;
+- подключение базы данных к Django через Django ORM: модели `Trip`,
+  `Participant`, `Expense`, миграции и административная панель;
 - формы Django для создания поездок, участников и расходов;
 - реализация пользователей, регистрации и разграничения доступа к поездкам;
 - разработка REST API;
