@@ -38,5 +38,25 @@
         "date": "2026-11-05",
         "payer_id": 2,
         "split_between": [2, 3]
+    },
+    {
+        "id": 5,
+        "trip_id": 2,
+        "title": "Аренда снаряжения",
+        "amount": 12000.0,
+        "category": "прочее",
+        "date": "2027-07-10",
+        "payer_id": 4,
+        "split_between": [4, 5]
+    },
+    {
+        "id": 6,
+        "trip_id": 2,
+        "title": "Трансфер до турбазы",
+        "amount": 8000.0,
+        "category": "транспорт",
+        "date": "2027-07-10",
+        "payer_id": 4,
+        "split_between": [4, 5]
     }
 ]
