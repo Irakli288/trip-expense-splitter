@@ -1,9 +1,9 @@
-"""Сервис распределения расходов поездки — консольное приложение (ПР3).
+"""Консольная версия сервиса для деления расходов в поездке.
 
-Предметная область представлена объектами Trip, Participant, Expense
-и Settlement. При запуске данные из JSON-файлов каталога data/
-превращаются в коллекции объектов, меню передает эти коллекции
-в функции модулей пакета models, а storage.py сохраняет изменения.
+Все строится на объектах Trip, Participant, Expense и Settlement.
+При запуске данные из папки data/ превращаются в списки объектов,
+меню передает их функциям из пакета models, а storage.py
+сохраняет изменения обратно в JSON.
 """
 
 import storage
@@ -53,7 +53,7 @@ MENU = """
 
 
 def create_trip(trips: list[Trip]) -> Trip:
-    """Запросить данные новой поездки, сохранить и вернуть ее."""
+    """Спрашивает данные новой поездки, сохраняет ее и возвращает."""
     name = input_text("Название поездки: ")
     start_date = input_date("Дата начала (ДД.ММ.ГГГГ): ")
     end_date = input_date("Дата окончания (ДД.ММ.ГГГГ): ")
@@ -68,7 +68,7 @@ def select_participant(
     participants: list[Participant],
     participant_id: int,
 ) -> Participant:
-    """Найти участника поездки по номеру или выбросить KeyError."""
+    """Ищет участника поездки по номеру, если нет такого, то KeyError."""
     participant = find_participant_by_id(participants, participant_id)
     if participant is None:
         raise KeyError(f"В поездке нет участника № {participant_id}")
@@ -80,7 +80,7 @@ def create_expense(
     trip: Trip,
     participants: list[Participant],
 ) -> None:
-    """Запросить данные расхода, найти участников и сохранить расход."""
+    """Спрашивает данные расхода, находит участников и сохраняет расход."""
     title = input_text("Название расхода: ")
     amount = input_amount("Сумма: ")
     print("Категории: " + ", ".join(CATEGORIES))
@@ -99,7 +99,7 @@ def create_expense(
 
 
 def main() -> None:
-    """Точка запуска: загрузка объектов из JSON и цикл меню."""
+    """Точка входа: загружает объекты из JSON и крутит меню."""
     trips = storage.load_trips()
     participants = storage.load_participants(trips)
     expenses = storage.load_expenses(trips, participants)

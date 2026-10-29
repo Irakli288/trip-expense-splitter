@@ -1,9 +1,9 @@
-"""Сохранение и загрузка объектов проекта в JSON-файлах.
+"""Сохраняет и загружает объекты проекта в JSON-файлах.
 
-JSON остается форматом хранения: при загрузке записи превращаются
-в объекты Trip, Participant и Expense, а при сохранении объекты
-превращаются обратно в записи. Связи между объектами хранятся
-в файлах как номера: trip_id, payer_id, split_between.
+Данные по-прежнему хранятся в JSON: при загрузке записи
+превращаются в объекты Trip, Participant и Expense, а при
+сохранении обратно в записи. Связи между объектами лежат
+в файлах просто номерами: trip_id, payer_id, split_between.
 """
 
 import json
@@ -21,11 +21,11 @@ EXPENSES_FILE = DATA_DIR / "expenses.json"
 
 
 def load_records(filename: Path) -> list[dict]:
-    """Загрузить список записей из JSON-файла.
+    """Загружает список записей из JSON-файла.
 
-    Если файла нет, возвращается пустой список. Если файл поврежден
-    или содержит не список, выводится предупреждение и тоже
-    возвращается пустой список — программа продолжает работу.
+    Если файла нет, возвращает пустой список. Если файл
+    испорчен или в нем не список, печатает предупреждение
+    и тоже возвращает пустой список, программа работает дальше.
     """
     try:
         with open(filename, encoding="utf-8") as file:
@@ -42,20 +42,20 @@ def load_records(filename: Path) -> list[dict]:
 
 
 def save_records(filename: Path, records: list[dict]) -> None:
-    """Сохранить список записей в JSON-файл."""
+    """Сохраняет список записей в JSON-файл."""
     filename.parent.mkdir(parents=True, exist_ok=True)
     with open(filename, "w", encoding="utf-8") as file:
         json.dump(records, file, ensure_ascii=False, indent=4)
 
 
 def skip_record(filename: Path, data: object, reason: str) -> None:
-    """Сообщить, что запись файла пропущена при загрузке."""
+    """Сообщает, что запись из файла пропущена при загрузке."""
     print(f"Предупреждение: в файле {filename.name} пропущена запись "
           f"{data} ({reason})")
 
 
 def load_trips(filename: Path = TRIPS_FILE) -> list[Trip]:
-    """Загрузить поездки и вернуть коллекцию объектов Trip."""
+    """Загружает поездки и возвращает их как объекты Trip."""
     trips = []
     for data in load_records(filename):
         try:
@@ -72,7 +72,7 @@ def load_trips(filename: Path = TRIPS_FILE) -> list[Trip]:
 
 
 def save_trips(trips: list[Trip], filename: Path = TRIPS_FILE) -> None:
-    """Преобразовать объекты Trip в записи и сохранить их."""
+    """Превращает объекты Trip в записи и сохраняет их."""
     save_records(filename, [
         {
             "id": trip.id,
@@ -89,7 +89,7 @@ def load_participants(
     trips: list[Trip],
     filename: Path = PARTICIPANTS_FILE,
 ) -> list[Participant]:
-    """Загрузить участников и связать каждого с объектом Trip."""
+    """Загружает участников и привязывает каждого к его поездке."""
     participants = []
     for data in load_records(filename):
         try:
@@ -106,7 +106,7 @@ def save_participants(
     participants: list[Participant],
     filename: Path = PARTICIPANTS_FILE,
 ) -> None:
-    """Сохранить участников; поездка записывается номером trip_id."""
+    """Сохраняет участников, поездка пишется номером trip_id."""
     save_records(filename, [
         {"id": item.id, "trip_id": item.trip.id, "name": item.name}
         for item in participants
@@ -118,10 +118,10 @@ def load_expenses(
     participants: list[Participant],
     filename: Path = EXPENSES_FILE,
 ) -> list[Expense]:
-    """Загрузить расходы и восстановить ссылки на поездку и участников.
+    """Загружает расходы и связывает их с поездкой и участниками.
 
-    Расход, ссылающийся на несуществующую поездку или участника,
-    не создается: выводится предупреждение и запись пропускается.
+    Если расход ссылается на поездку или участника, которых нет,
+    он пропускается с предупреждением.
     """
     expenses = []
     for data in load_records(filename):
@@ -155,7 +155,7 @@ def save_expenses(
     expenses: list[Expense],
     filename: Path = EXPENSES_FILE,
 ) -> None:
-    """Сохранить расходы; связанные объекты записываются номерами."""
+    """Сохраняет расходы, связанные объекты пишутся номерами."""
     save_records(filename, [
         {
             "id": item.id,
@@ -172,10 +172,10 @@ def save_expenses(
 
 
 def load_all() -> tuple[list[Trip], list[Participant], list[Expense]]:
-    """Загрузить поездки, участников и расходы со связями (для ПР5).
+    """Загружает поездки, участников и расходы вместе со связями.
 
-    Используется view-функциями Django: каждая страница получает
-    коллекции объектов так же, как консольное меню main.py.
+    Это нужно Django-страницам: они получают данные так же,
+    как консольное меню в main.py.
     """
     trips = load_trips()
     participants = load_participants(trips)

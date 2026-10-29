@@ -7,7 +7,7 @@ from db.database import get_connection
 from models import Expense, Participant, Settlement, Trip
 from models.settlement import get_settlement_status
 
-# Запрос 12 из sql/queries.sql: поездки с итогами и уровнем бюджета.
+# Запрос 12 из sql/queries.sql: поездки с итогами и долей потраченного бюджета.
 TRIPS_QUERY = """
     SELECT
         trips.id,
@@ -74,7 +74,7 @@ PARTICIPANTS_QUERY = """
     ORDER BY name;
 """
 
-# Запрос 7: расходы поездки с именем плательщика.
+# Запрос 7: расходы поездки и кто за них платил.
 TRIP_EXPENSES_QUERY = """
     SELECT
         expenses.id,
@@ -92,7 +92,7 @@ TRIP_EXPENSES_QUERY = """
     ORDER BY expenses.expense_date, expenses.id;
 """
 
-# Запрос 6: участники поездки, которые еще ничего не оплачивали.
+# Запрос 6: участники, которые пока ни за что не платили.
 NOT_PAID_QUERY = """
     SELECT
         id,
@@ -107,7 +107,7 @@ NOT_PAID_QUERY = """
     ORDER BY name;
 """
 
-# Запрос 10: доли всех расходов поездки.
+# Запрос 10: доли по всем расходам поездки.
 TRIP_SHARES_QUERY = """
     SELECT
         expense_shares.expense_id,
@@ -170,10 +170,10 @@ def trip_detail(request, trip_id):
 
 
 def load_settlement(conn, trip_id):
-    """Построить объект Settlement (ПР3) по данным поездки из SQLite.
+    """Собирает объект Settlement из данных поездки в SQLite.
 
-    Записи таблиц превращаются в объекты Trip, Participant и Expense,
-    а балансы и переводы считает уже готовый класс Settlement.
+    Строки таблиц превращаются в объекты Trip, Participant
+    и Expense, а балансы и переводы считает готовый класс Settlement.
     """
     row = conn.execute(TRIP_RECORD_QUERY, [trip_id]).fetchone()
     if row is None:

@@ -7,18 +7,18 @@ class Participant:
     """Участник поездки."""
 
     def __init__(self, participant_id: int, name: str, trip: Trip) -> None:
-        """Создать участника, связанного с объектом поездки."""
+        """Создает участника и привязывает его к поездке."""
         self.id = participant_id
         self.name = name
         self.trip = trip
 
     @classmethod
     def from_data(cls, data: dict, trip: Trip) -> "Participant":
-        """Создать участника из записи JSON и найденной поездки."""
+        """Создает участника из записи JSON и уже найденной поездки."""
         return cls(data["id"], data["name"], trip)
 
     def __str__(self) -> str:
-        """Вернуть строку вида «Имя (поездка)»."""
+        """Возвращает строку вида «Имя (поездка)»."""
         return f"{self.name} ({self.trip.name})"
 
 
@@ -26,7 +26,7 @@ def get_trip_participants(
     participants: list[Participant],
     trip: Trip,
 ) -> list[Participant]:
-    """Вернуть участников указанной поездки."""
+    """Возвращает участников нужной поездки."""
     return [item for item in participants if item.trip is trip]
 
 
@@ -35,10 +35,10 @@ def add_participant(
     trip: Trip,
     name: str,
 ) -> Participant:
-    """Создать участника поездки, добавить в коллекцию и вернуть.
+    """Создает участника поездки, добавляет в список и возвращает.
 
-    Имена участников внутри одной поездки не повторяются:
-    при повторе выбрасывается ValueError.
+    В одной поездке не может быть двух участников с одинаковым
+    именем, в таком случае будет ValueError.
     """
     names = {item.name.lower()
              for item in get_trip_participants(participants, trip)}
@@ -54,7 +54,7 @@ def find_participant_by_id(
     participants: list[Participant],
     participant_id: int,
 ) -> Participant | None:
-    """Вернуть участника с указанным номером или None."""
+    """Возвращает участника с таким номером или None, если его нет."""
     for participant in participants:
         if participant.id == participant_id:
             return participant
@@ -65,13 +65,13 @@ def find_participant(
     participants: list[Participant],
     query: str,
 ) -> list[Participant]:
-    """Найти участников, в имени которых есть подстрока query."""
+    """Ищет участников, у которых в имени есть строка query."""
     query = query.lower()
     return [item for item in participants if query in item.name.lower()]
 
 
 def show_participants(participants: list[Participant]) -> None:
-    """Вывести участников поездки."""
+    """Печатает участников поездки."""
     if not participants:
         print("В поездке нет участников")
         return

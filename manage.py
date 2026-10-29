@@ -1,12 +1,12 @@
 #!/usr/bin/env python
-"""Django's command-line utility for administrative tasks."""
+"""Утилита Django для служебных команд (runserver, test и другие)."""
 
 import os
 import sys
 
 
 def main():
-    """Run administrative tasks."""
+    """Запускает служебную команду Django."""
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "splitter.settings")
     try:
         from django.core.management import execute_from_command_line

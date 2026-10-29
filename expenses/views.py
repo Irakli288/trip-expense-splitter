@@ -5,7 +5,7 @@ from django.shortcuts import render
 from db.database import get_connection
 from models.expenses import CATEGORIES, calculate_share
 
-# Запрос 1 из sql/queries.sql: список поездок для формы поиска.
+# Запрос 1 из sql/queries.sql: поездки для списка в форме поиска.
 TRIPS_QUERY = """
     SELECT
         id,
@@ -14,9 +14,9 @@ TRIPS_QUERY = """
     ORDER BY start_date;
 """
 
-# Запрос 4: поиск расходов по поездке, категории и минимальной сумме.
-# Условие (? = 0 OR ...) отключает фильтр, если поездка не выбрана,
-# а (? = '' OR ...) - если не выбрана категория.
+# Запрос 4: ищем расходы по поездке, категории и минимальной сумме.
+# Часть (? = 0 OR ...) выключает фильтр, если поездка не выбрана,
+# а (? = '' OR ...) делает то же, если не выбрана категория.
 EXPENSES_QUERY = """
     SELECT
         expenses.id,
@@ -38,7 +38,7 @@ EXPENSES_QUERY = """
     ORDER BY expenses.expense_date, expenses.id;
 """
 
-# Запрос 5: количество и сумма найденных расходов.
+# Запрос 5: сколько расходов нашлось и на какую сумму.
 EXPENSES_TOTAL_QUERY = """
     SELECT
         COUNT(*) AS expenses_count,
@@ -49,7 +49,7 @@ EXPENSES_TOTAL_QUERY = """
         AND amount >= ?;
 """
 
-# Запрос 8: расход по номеру с поездкой и плательщиком.
+# Запрос 8: расход по номеру вместе с поездкой и плательщиком.
 EXPENSE_QUERY = """
     SELECT
         expenses.id,
@@ -68,7 +68,7 @@ EXPENSE_QUERY = """
     WHERE expenses.id = ?;
 """
 
-# Запрос 9: участники, между которыми делится расход.
+# Запрос 9: на кого делится расход.
 SHARES_QUERY = """
     SELECT
         participants.id,
@@ -80,7 +80,7 @@ SHARES_QUERY = """
     ORDER BY participants.id;
 """
 
-# Запрос 14: итоги по категориям.
+# Запрос 14: сколько потрачено по каждой категории.
 CATEGORY_TOTALS_QUERY = """
     SELECT
         category,
@@ -93,7 +93,7 @@ CATEGORY_TOTALS_QUERY = """
     ORDER BY total DESC;
 """
 
-# Запрос 15: сколько оплатил каждый участник.
+# Запрос 15: сколько заплатил каждый участник.
 PAYERS_QUERY = """
     SELECT
         participants.name AS participant_name,
@@ -109,7 +109,7 @@ PAYERS_QUERY = """
     ORDER BY paid_total DESC, participants.name;
 """
 
-# Запрос 16: категории, на которые потрачено не меньше заданной суммы.
+# Запрос 16: категории, где потрачено не меньше заданной суммы.
 BIG_CATEGORIES_QUERY = """
     SELECT
         category,
@@ -120,7 +120,7 @@ BIG_CATEGORIES_QUERY = """
     ORDER BY total DESC;
 """
 
-# Запрос 17: поездки, израсходовавшие 80% бюджета и больше.
+# Запрос 17: поездки, где потрачено 80% бюджета и больше.
 BUDGET_ALERTS_QUERY = """
     SELECT
         trips.id,
@@ -138,7 +138,7 @@ BUDGET_ALERTS_QUERY = """
     ORDER BY used_percent DESC;
 """
 
-# Запрос 3: три самых крупных расхода.
+# Запрос 3: три самых дорогих расхода.
 TOP_EXPENSES_QUERY = """
     SELECT
         expenses.id,
@@ -156,10 +156,10 @@ DEFAULT_MIN_TOTAL = 5000
 
 
 def parse_number(text, default=0, number_type=float):
-    """Преобразовать параметр URL в неотрицательное число.
+    """Превращает параметр из адреса в неотрицательное число.
 
-    Пустое или некорректное значение заменяется значением по умолчанию,
-    поэтому ошибка в адресе не приводит к ошибке страницы.
+    Если значение пустое или кривое, берется значение по умолчанию.
+    Так опечатка в адресе не ломает страницу.
     """
     try:
         value = number_type(text)

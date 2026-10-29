@@ -1,4 +1,4 @@
-"""Тесты слоя базы данных SQLite (ПР7)."""
+"""Тесты работы с базой SQLite."""
 
 import sqlite3
 from pathlib import Path

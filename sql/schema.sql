@@ -1,9 +1,9 @@
 -- ==========================================================
--- Сервис распределения расходов поездки: структура базы данных
--- ПР7. СУБД SQLite, файл базы: data/splitter.sqlite
+-- Как устроена база данных сервиса для деления расходов в поездке
+-- СУБД SQLite, сама база лежит в файле data/splitter.sqlite
 -- ==========================================================
 
--- Поездки. budget может быть NULL: бюджет поездки не задан.
+-- Поездки. budget может быть NULL, если бюджет не задан.
 CREATE TABLE IF NOT EXISTS trips (
     id INTEGER PRIMARY KEY,
     name TEXT NOT NULL,
@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS trips (
     CHECK (start_date <= end_date)
 );
 
--- Участники. Каждый участник относится к одной поездке.
+-- Участники. Каждый участник едет в одну конкретную поездку.
 CREATE TABLE IF NOT EXISTS participants (
     id INTEGER PRIMARY KEY,
     trip_id INTEGER NOT NULL,
@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS participants (
     FOREIGN KEY (trip_id) REFERENCES trips(id)
 );
 
--- Расходы. Расход относится к поездке и оплачен одним участником.
+-- Расходы. Каждый расход относится к поездке, и платит за него один участник.
 CREATE TABLE IF NOT EXISTS expenses (
     id INTEGER PRIMARY KEY,
     trip_id INTEGER NOT NULL,
@@ -36,8 +36,8 @@ CREATE TABLE IF NOT EXISTS expenses (
     FOREIGN KEY (payer_id) REFERENCES participants(id)
 );
 
--- Доли расходов: между какими участниками делится расход.
--- Связь «многие ко многим» между expenses и participants.
+-- Доли: на каких участников делится расход.
+-- Это связь «многие ко многим» между expenses и participants.
 CREATE TABLE IF NOT EXISTS expense_shares (
     expense_id INTEGER NOT NULL,
     participant_id INTEGER NOT NULL,

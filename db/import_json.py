@@ -1,12 +1,12 @@
-"""Перенос данных проекта из JSON-файлов в базу SQLite (ПР7).
+"""Переносит данные из JSON-файлов в базу SQLite.
 
-Запуск из корня проекта:
+Запускать из корня проекта:
 
     python -m db.import_json
 
-Скрипт создает таблицы (если их еще нет), очищает их и заново
-заполняет записями из data/trips.json, data/participants.json
-и data/expenses.json, поэтому его можно запускать повторно.
+Скрипт создает таблицы, если их еще нет, очищает их и заново
+заливает записи из data/trips.json, data/participants.json
+и data/expenses.json. Поэтому его можно запускать сколько угодно раз.
 """
 
 import json
@@ -20,13 +20,13 @@ EXPENSES_FILE = BASE_DIR / "data" / "expenses.json"
 
 
 def load_json(filename: Path) -> list[dict]:
-    """Прочитать список записей из JSON-файла."""
+    """Читает список записей из JSON-файла."""
     with open(filename, encoding="utf-8") as file:
         return json.load(file)
 
 
 def clear_tables(conn) -> None:
-    """Удалить старые записи: сначала зависимые таблицы, потом главные."""
+    """Удаляет старые записи: сначала зависимые таблицы, потом основные."""
     conn.execute("DELETE FROM expense_shares")
     conn.execute("DELETE FROM expenses")
     conn.execute("DELETE FROM participants")
@@ -34,7 +34,7 @@ def clear_tables(conn) -> None:
 
 
 def import_trips(conn) -> None:
-    """Перенести поездки; бюджет 0 сохраняется как NULL (не задан)."""
+    """Переносит поездки. Бюджет 0 значит «не задан» и пишется как NULL."""
     trips = load_json(TRIPS_FILE)
     conn.executemany(
         """
@@ -55,7 +55,7 @@ def import_trips(conn) -> None:
 
 
 def import_participants(conn) -> None:
-    """Перенести участников поездок."""
+    """Переносит участников поездок."""
     participants = load_json(PARTICIPANTS_FILE)
     conn.executemany(
         """
@@ -70,10 +70,10 @@ def import_participants(conn) -> None:
 
 
 def import_expenses(conn) -> None:
-    """Перенести расходы и список участников каждого расхода.
+    """Переносит расходы и то, между кем делится каждый расход.
 
-    Поле split_between из JSON превращается в записи таблицы
-    expense_shares: одна запись на каждого участника расхода.
+    Список split_between из JSON раскладывается по таблице
+    expense_shares: по одной строке на каждого участника расхода.
     """
     expenses = load_json(EXPENSES_FILE)
     conn.executemany(
@@ -110,7 +110,7 @@ def import_expenses(conn) -> None:
 
 
 def main(db_path: Path | str | None = None) -> None:
-    """Создать таблицы и перенести в них все данные JSON."""
+    """Создает таблицы и переносит в них все данные из JSON."""
     conn = get_connection(db_path)
     try:
         create_tables(conn)
