@@ -1,10 +1,9 @@
-"""
-ASGI config for splitter project.
+"""Настройка ASGI для проекта splitter.
 
-It exposes the ASGI callable as a module-level variable named ``application``.
+Здесь создается объект application, через который ASGI-сервер
+запускает сайт.
 
-For more information on this file, see
-https://docs.djangoproject.com/en/5.2/howto/deployment/asgi/
+Подробнее: https://docs.djangoproject.com/en/5.2/howto/deployment/asgi/
 """
 
 import os

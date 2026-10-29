@@ -13,10 +13,10 @@ CATEGORIES = ("жилье", "транспорт", "еда", "развлечен�
 
 
 def calculate_share(total_amount: float, participants_count: int) -> float:
-    """Рассчитать долю одного участника в расходе (функция из ПР1).
+    """Считает, сколько должен заплатить один участник.
 
-    Доля округляется вверх до копеек, чтобы сумма долей
-    гарантированно покрывала расход.
+    Доля округляется вверх до копеек, чтобы в сумме доли
+    точно покрыли весь расход.
     """
     if participants_count <= 0:
         return 0.0
@@ -24,7 +24,7 @@ def calculate_share(total_amount: float, participants_count: int) -> float:
 
 
 class Expense:
-    """Расход поездки: кто оплатил и между кем он делится."""
+    """Расход в поездке: кто заплатил и на кого он делится."""
 
     def __init__(
         self,
@@ -37,10 +37,10 @@ class Expense:
         category: str = "прочее",
         expense_date: date | None = None,
     ) -> None:
-        """Создать расход; некорректные данные дают ValueError.
+        """Создает расход. Если данные неправильные, будет ValueError.
 
-        split_between — участники, между которыми делится расход;
-        плательщик не обязан входить в этот список.
+        split_between — это те, на кого делится расход.
+        Тот, кто платил, не обязательно входит в этот список.
         """
         if amount <= 0:
             raise ValueError("Сумма расхода должна быть больше нуля")
@@ -62,20 +62,20 @@ class Expense:
 
     @staticmethod
     def validate_category(category: str) -> bool:
-        """Проверить, что категория есть в списке CATEGORIES."""
+        """Проверяет, что такая категория есть в CATEGORIES."""
         return category in CATEGORIES
 
     @property
     def share(self) -> float:
-        """Доля одного участника в этом расходе."""
+        """Сколько приходится на одного участника в этом расходе."""
         return calculate_share(self.amount, len(self.split_between))
 
     def is_shared_with(self, participant: Participant) -> bool:
-        """Проверить, участвует ли участник в разделе расхода."""
+        """Проверяет, делится ли расход на этого участника."""
         return participant in self.split_between
 
     def __str__(self) -> str:
-        """Вернуть строку с суммой, категорией, плательщиком и долями."""
+        """Возвращает строку с суммой, категорией, плательщиком и долями."""
         split = ", ".join(item.name for item in self.split_between)
         return (f"{self.title:<22} {format_money(self.amount):>14}  "
                 f"[{self.category}] оплатил {self.payer.name}"
@@ -92,7 +92,7 @@ def add_expense(
     category: str = "прочее",
     expense_date: date | None = None,
 ) -> Expense:
-    """Создать объект Expense, добавить его в коллекцию и вернуть."""
+    """Создает расход, добавляет его в список и возвращает."""
     expense_id = max((item.id for item in expenses), default=0) + 1
     expense = Expense(expense_id, trip, title, amount, payer,
                       split_between, category, expense_date)
@@ -104,7 +104,7 @@ def find_expense_by_id(
     expenses: list[Expense],
     expense_id: int,
 ) -> Expense | None:
-    """Вернуть расход с указанным номером или None (добавлена в ПР5)."""
+    """Возвращает расход с таким номером или None, если его нет."""
     for expense in expenses:
         if expense.id == expense_id:
             return expense
@@ -116,9 +116,9 @@ def delete_expense(
     trip: Trip,
     expense_id: int,
 ) -> Expense:
-    """Удалить расход поездки по номеру и вернуть его.
+    """Удаляет расход поездки по номеру и возвращает его.
 
-    Если в поездке нет такого расхода, выбрасывается KeyError.
+    Если такого расхода в поездке нет, будет KeyError.
     """
     for index, expense in enumerate(expenses):
         if expense.id == expense_id and expense.trip is trip:
@@ -130,7 +130,7 @@ def iter_trip_expenses(
     expenses: list[Expense],
     trip: Trip,
 ) -> Iterator[Expense]:
-    """Генератор: по одному выдает расходы указанной поездки."""
+    """Генератор, который по одному отдает расходы нужной поездки."""
     for expense in expenses:
         if expense.trip is trip:
             yield expense
@@ -140,7 +140,7 @@ def filter_by_category(
     expenses: list[Expense],
     category: str,
 ) -> list[Expense]:
-    """Отобрать расходы указанной категории."""
+    """Оставляет только расходы нужной категории."""
     return [item for item in expenses if item.category == category]
 
 
@@ -148,19 +148,19 @@ def sort_expenses(
     expenses: list[Expense],
     by: str = "amount",
 ) -> list[Expense]:
-    """Отсортировать расходы по сумме (по убыванию) или по дате."""
+    """Сортирует расходы по сумме (от большей к меньшей) или по дате."""
     if by == "date":
         return sorted(expenses, key=lambda item: item.date)
     return sorted(expenses, key=lambda item: item.amount, reverse=True)
 
 
 def get_total(expenses: list[Expense]) -> float:
-    """Вернуть общую сумму расходов."""
+    """Считает общую сумму расходов."""
     return round(sum(item.amount for item in expenses), 2)
 
 
 def get_totals_by_category(expenses: list[Expense]) -> dict[str, float]:
-    """Вернуть словарь «категория → сумма расходов»."""
+    """Возвращает словарь «категория → сколько потрачено»."""
     totals: dict[str, float] = {}
     for expense in expenses:
         totals[expense.category] = round(
@@ -170,7 +170,7 @@ def get_totals_by_category(expenses: list[Expense]) -> dict[str, float]:
 
 
 def show_expenses(expenses: list[Expense]) -> None:
-    """Вывести расходы и итоги по категориям."""
+    """Печатает расходы и итоги по категориям."""
     if not expenses:
         print("Расходов нет")
         return

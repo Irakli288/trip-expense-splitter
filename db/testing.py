@@ -1,8 +1,8 @@
-"""Временная база SQLite для тестов Django-страниц (ПР7).
+"""Временная база SQLite для тестов Django-страниц.
 
-Тесты не зависят от состояния data/splitter.sqlite: перед тестами
-класса база создается заново из sql/schema.sql и JSON-файлов,
-а get_connection() на время тестов подключается к ней.
+Тестам все равно, что сейчас лежит в data/splitter.sqlite:
+перед тестами класса база собирается заново из sql/schema.sql
+и JSON-файлов, а get_connection() на это время смотрит в нее.
 """
 
 import tempfile
@@ -13,7 +13,7 @@ from db import import_json
 
 
 class TemporaryDatabaseMixin:
-    """Подменяет DB_PATH временной базой с данными из JSON."""
+    """Подставляет вместо DB_PATH временную базу с данными из JSON."""
 
     @classmethod
     def setUpClass(cls):

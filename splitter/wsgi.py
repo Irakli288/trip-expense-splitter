@@ -1,10 +1,9 @@
-"""
-WSGI config for splitter project.
+"""Настройка WSGI для проекта splitter.
 
-It exposes the WSGI callable as a module-level variable named ``application``.
+Здесь создается объект application, через который WSGI-сервер
+запускает сайт.
 
-For more information on this file, see
-https://docs.djangoproject.com/en/5.2/howto/deployment/wsgi/
+Подробнее: https://docs.djangoproject.com/en/5.2/howto/deployment/wsgi/
 """
 
 import os

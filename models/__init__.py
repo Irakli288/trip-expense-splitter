@@ -1,6 +1,6 @@
-"""Объектная модель предметной области (ПР3).
+"""Классы предметной области: поездки, участники, расходы, расчет.
 
-Классы импортируются из пакета: from models import Trip, Participant.
+Импортировать можно прямо из пакета: from models import Trip, Participant.
 """
 
 from .expenses import Expense

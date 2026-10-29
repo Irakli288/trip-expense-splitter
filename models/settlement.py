@@ -1,4 +1,4 @@
-"""Класс Settlement: доли, балансы и переводы между участниками."""
+"""Класс Settlement: доли, балансы и кто кому сколько переводит."""
 
 from utils import format_money
 
@@ -8,12 +8,12 @@ from .trips import Trip
 
 
 def calculate_balance(paid_amount: float, share: float) -> float:
-    """Вернуть баланс: сколько участник заплатил сверх доли (из ПР1)."""
+    """Баланс участника: насколько он заплатил больше своей доли."""
     return round(paid_amount - share, 2)
 
 
 def get_settlement_status(name: str, balance: float) -> str:
-    """Сформировать текстовый статус расчета участника (из ПР1)."""
+    """Собирает текстовый статус участника: должен он или ему должны."""
     if balance > 0:
         return f"{name}: ему должны вернуть {format_money(balance)}"
     elif balance < 0:
@@ -25,12 +25,12 @@ def get_settlement_status(name: str, balance: float) -> str:
 def make_transfers(
     balances: dict[Participant, float],
 ) -> list[tuple[Participant, Participant, float]]:
-    """Составить список переводов (кто, кому, сколько).
+    """Составляет список переводов: кто, кому и сколько.
 
-    Должники и получатели упорядочиваются по величине долга,
-    и самый крупный должник переводит деньги самому крупному
-    получателю, пока долги не будут закрыты. Копеечный остаток
-    от округления долей вверх не переводится.
+    Должников и получателей сортируем по размеру долга, и самый
+    большой должник платит самому большому получателю, пока все
+    долги не закроются. Копейки, оставшиеся после округления
+    долей вверх, никому не переводятся.
     """
     debtors = sorted(
         ([person, -value] for person, value in balances.items() if value < 0),
@@ -56,7 +56,7 @@ def make_transfers(
 
 
 class Settlement:
-    """Итоговый расчет поездки по ее участникам и расходам."""
+    """Итоговый расчет по поездке: участники и их расходы."""
 
     def __init__(
         self,
@@ -64,16 +64,16 @@ class Settlement:
         participants: list[Participant],
         expenses: list[Expense],
     ) -> None:
-        """Создать расчет для поездки, ее участников и расходов."""
+        """Создает расчет для поездки, ее участников и расходов."""
         self.trip = trip
         self.participants = participants
         self.expenses = expenses
 
     def get_balances(self) -> dict[Participant, float]:
-        """Рассчитать баланс каждого участника по всем расходам.
+        """Считает баланс каждого участника по всем расходам.
 
-        Плательщику засчитывается вся сумма расхода,
-        а каждому из split_between — его доля.
+        Тому, кто платил, засчитывается вся сумма расхода,
+        а с каждого из split_between списывается его доля.
         """
         paid = dict.fromkeys(self.participants, 0.0)
         owed = dict.fromkeys(self.participants, 0.0)
@@ -88,11 +88,11 @@ class Settlement:
         }
 
     def get_transfers(self) -> list[tuple[Participant, Participant, float]]:
-        """Вернуть переводы, закрывающие долги участников."""
+        """Возвращает переводы, после которых никто никому не должен."""
         return make_transfers(self.get_balances())
 
     def __str__(self) -> str:
-        """Вернуть статусы участников и список переводов."""
+        """Возвращает статусы участников и список переводов."""
         lines = [get_settlement_status(participant.name, balance)
                  for participant, balance in self.get_balances().items()]
         transfers = self.get_transfers()

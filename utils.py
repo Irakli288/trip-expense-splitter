@@ -1,4 +1,4 @@
-"""Вспомогательные функции: разбор сумм и дат, безопасный ввод."""
+"""Мелкие помощники: разбор сумм и дат, ввод с проверкой."""
 
 from datetime import date, datetime
 
@@ -7,11 +7,10 @@ DATE_FORMAT = "%d.%m.%Y"
 
 
 def parse_amount(text: str) -> float:
-    """Преобразовать строку с суммой в число float.
+    """Превращает строку с суммой в число.
 
-    Принимает запятую или точку как разделитель дробной части.
-    Функция перенесена из ПР1; теперь при некорректной сумме
-    она не возвращает -1.0, а выбрасывает ValueError.
+    Дробную часть можно отделять запятой или точкой.
+    Если сумма записана неправильно, будет ValueError.
     """
     cleaned = text.strip().replace(",", ".")
     amount = float(cleaned)
@@ -21,17 +20,17 @@ def parse_amount(text: str) -> float:
 
 
 def parse_date(text: str) -> date:
-    """Преобразовать строку вида ДД.ММ.ГГГГ в объект date."""
+    """Превращает строку вида ДД.ММ.ГГГГ в дату."""
     return datetime.strptime(text.strip(), DATE_FORMAT).date()
 
 
 def format_money(amount: float) -> str:
-    """Вернуть сумму в виде строки с двумя знаками и валютой."""
+    """Возвращает сумму строкой с двумя знаками после запятой и валютой."""
     return f"{amount:.2f} {CURRENCY}"
 
 
 def input_text(prompt: str) -> str:
-    """Запросить непустую строку; пустой ввод повторяет запрос."""
+    """Спрашивает непустую строку, пока ее не введут."""
     while True:
         text = input(prompt).strip()
         if text:
@@ -40,7 +39,7 @@ def input_text(prompt: str) -> str:
 
 
 def input_int(prompt: str) -> int:
-    """Запросить целое число; при ошибке запрос повторяется."""
+    """Спрашивает целое число, пока не введут правильно."""
     while True:
         try:
             return int(input(prompt))
@@ -49,7 +48,7 @@ def input_int(prompt: str) -> int:
 
 
 def input_amount(prompt: str) -> float:
-    """Запросить положительную сумму; при ошибке запрос повторяется."""
+    """Спрашивает положительную сумму, пока не введут правильно."""
     while True:
         try:
             return parse_amount(input(prompt))
@@ -58,7 +57,7 @@ def input_amount(prompt: str) -> float:
 
 
 def input_date(prompt: str) -> date:
-    """Запросить дату в формате ДД.ММ.ГГГГ; при ошибке запрос повторяется."""
+    """Спрашивает дату в формате ДД.ММ.ГГГГ, пока не введут правильно."""
     while True:
         try:
             return parse_date(input(prompt))
@@ -67,7 +66,7 @@ def input_date(prompt: str) -> date:
 
 
 def input_ids(prompt: str) -> list[int]:
-    """Запросить номера через запятую; пустой ввод означает «все»."""
+    """Спрашивает номера через запятую, пустой ввод значит «все»."""
     while True:
         text = input(prompt).strip()
         if not text:

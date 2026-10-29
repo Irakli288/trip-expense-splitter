@@ -4,7 +4,7 @@ from django.shortcuts import render
 
 from db.database import get_connection
 
-# Запрос 11 из sql/queries.sql: сводка сервиса.
+# Запрос 11 из sql/queries.sql: общие цифры по сервису.
 SUMMARY_QUERY = """
     SELECT
         (SELECT COUNT(*) FROM trips) AS trips_count,
