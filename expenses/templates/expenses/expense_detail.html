@@ -12,10 +12,16 @@
     {% if expense %}
         <div class="card">
             <div class="card-body">
-                <h1 class="card-title h3">{{ expense.title }}</h1>
+                <h1 class="card-title h3">
+                    {{ expense.title }}
+                    {% include "expenses/includes/status_badge.html" %}
+                </h1>
+                {% if expense.is_cancelled %}
+                    <p class="text-body-secondary">Расход отменен и не входит в итоги поездки и расчет долгов.</p>
+                {% endif %}
                 <p class="card-text">
                     <strong>Поездка:</strong>
-                    <a href="{% url 'trips:detail' expense.trip_id %}">
+                    <a href="{{ expense.trip.get_absolute_url }}">
                         {{ expense.trip.name }}
                     </a>
                 </p>

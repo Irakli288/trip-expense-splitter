@@ -1,7 +1,8 @@
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 
 import models as domain
 from models.settlement import get_settlement_status
+from expenses.choices import Status
 from splitter.search import text_search
 
 from .models import Trip
@@ -17,17 +18,28 @@ def trips(request):
     return render(request, "trips/trip_list.html", context)
 
 
-def trip_detail(request, trip_id):
-    trip = Trip.objects.with_totals().filter(pk=trip_id).first()
+def trip_by_id(request, trip_id):
+    """Старые адреса /trips/1/ ведут на новые /trips/poezdka-v-kazan/."""
+    trip = Trip.objects.filter(pk=trip_id).only("slug").first()
+    if trip is None:
+        return render(request, "trips/trip_detail.html", status=404)
+    return redirect(trip, permanent=True)
+
+
+def trip_detail(request, slug):
+    trip = Trip.objects.with_totals().filter(slug=slug).first()
     context = {"trip": trip}
     if trip is not None:
         context.update({
             "participants": trip.participants.all(),
             # select_related("payer") забирает плательщика тем же запросом,
             # иначе на каждую строку таблицы был бы еще один запрос.
+            # Отмененные расходы тоже показываем, но серым цветом.
             "expenses": trip.expenses.select_related("payer"),
-            # Участники без единого оплаченного расхода.
-            "not_paid": trip.participants.filter(paid_expenses__isnull=True),
+            # Участники, которые не оплатили ни одного действующего расхода.
+            "not_paid": trip.participants.exclude(
+                paid_expenses__status=Status.ACTIVE
+            ),
         })
     return render(
         request,
@@ -37,16 +49,13 @@ def trip_detail(request, trip_id):
     )
 
 
-def load_settlement(trip_id):
-    """Собирает объект Settlement из ПР3 по данным поездки из базы.
+def load_settlement(record):
+    """Собирает объект Settlement из ПР3 по поездке из базы.
 
     Балансы и переводы по-прежнему считает класс Settlement, поэтому
     записи моделей Django превращаются в объекты Trip, Participant
-    и Expense из пакета models.
+    и Expense из пакета models. Отмененные расходы в расчет не входят.
     """
-    record = Trip.objects.filter(pk=trip_id).first()
-    if record is None:
-        return None
     trip = domain.Trip(
         record.pk,
         record.name,
@@ -71,17 +80,18 @@ def load_settlement(trip_id):
             item.category,
             item.expense_date,
         )
-        for item in record.expenses.prefetch_related("split_between")
+        for item in record.expenses.active().prefetch_related(
+            "split_between"
+        )
     ]
     return domain.Settlement(trip, list(participants.values()), expenses)
 
 
-def trip_settlement(request, trip_id):
-    settlement = load_settlement(trip_id)
-    context = {
-        "trip": settlement.trip if settlement else None,
-    }
-    if settlement is not None:
+def trip_settlement(request, slug):
+    record = Trip.objects.filter(slug=slug).first()
+    context = {"trip": record}
+    if record is not None:
+        settlement = load_settlement(record)
         context["balances"] = [
             {
                 "participant": person,
@@ -95,5 +105,5 @@ def trip_settlement(request, trip_id):
         request,
         "trips/trip_settlement.html",
         context,
-        status=404 if settlement is None else 200,
+        status=404 if record is None else 200,
     )

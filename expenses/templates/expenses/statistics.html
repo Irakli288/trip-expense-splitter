@@ -4,6 +4,9 @@
 
 {% block content %}
     <h1>Статистика расходов</h1>
+    <p class="text-body-secondary">
+        Считаются только действующие расходы. Крупных (от 10 000 ₽): {{ large_count }}.
+    </p>
 
     <div class="row g-4">
         <section class="col-lg-7">
@@ -39,7 +42,7 @@
             <ol class="list-group list-group-numbered mb-4">
                 {% for expense in top_expenses %}
                     <li class="list-group-item d-flex justify-content-between">
-                        <a href="{% url 'expenses:detail' expense.id %}">{{ expense.title }}</a>
+                        <a href="{{ expense.get_absolute_url }}">{{ expense.title }}</a>
                         <span>{{ expense.amount|floatformat:"2g" }} ₽</span>
                     </li>
                 {% empty %}
@@ -51,7 +54,7 @@
             <ul class="list-group">
                 {% for trip in budget_alerts %}
                     <li class="list-group-item d-flex justify-content-between">
-                        <a href="{% url 'trips:detail' trip.id %}">{{ trip.name }}</a>
+                        <a href="{{ trip.get_absolute_url }}">{{ trip.name }}</a>
                         <span class="badge {% if trip.used_percent > 100 %}bg-danger{% else %}bg-warning text-dark{% endif %}">
                             {{ trip.used_percent }}% бюджета
                         </span>
@@ -106,6 +109,30 @@
                     <li class="list-group-item">Нет категорий с такой суммой</li>
                 {% endfor %}
             </ul>
+        </section>
+
+        <section class="col-lg-7">
+            <h2 class="h5">Расходы по статусу</h2>
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Статус</th>
+                        <th class="text-end">Расходов</th>
+                        <th class="text-end">Сумма</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in by_status %}
+                        <tr>
+                            <td>{{ row.label }}</td>
+                            <td class="text-end">{{ row.expenses_count }}</td>
+                            <td class="text-end">{{ row.total|floatformat:"2g" }} ₽</td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="3">Данные отсутствуют.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </section>
     </div>
 {% endblock %}

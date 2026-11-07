@@ -33,7 +33,7 @@
                         {% endif %}
                     </span>
                 </p>
-                <a href="{% url 'trips:settlement' trip.id %}" class="btn btn-primary">
+                <a href="{% url 'trips:settlement' trip.slug %}" class="btn btn-primary">
                     Кто кому должен
                 </a>
                 <a href="{% url 'trips:list' %}" class="btn btn-outline-secondary">
@@ -69,11 +69,12 @@
                     </thead>
                     <tbody>
                         {% for expense in expenses %}
-                            <tr>
+                            <tr {% if expense.is_cancelled %}class="text-body-secondary expense-cancelled"{% endif %}>
                                 <td>
-                                    <a href="{% url 'expenses:detail' expense.id %}">
+                                    <a href="{{ expense.get_absolute_url }}">
                                         {{ expense.title }}
                                     </a>
+                                    {% include "expenses/includes/status_badge.html" %}
                                 </td>
                                 <td>{% include "expenses/includes/category_badge.html" %}</td>
                                 <td>{{ expense.payer.name }}</td>

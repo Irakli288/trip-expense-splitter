@@ -115,11 +115,13 @@ View-функции больше не собирают HTML-строки: они
 |---|---|---|---|
 | `/` | `homepage:index` | `homepage.views.index` | `homepage/index.html` |
 | `/trips/` | `trips:list` | `trips.views.trips` | `trips/trip_list.html` |
-| `/trips/<int:trip_id>/` | `trips:detail` | `trips.views.trip_detail` | `trips/trip_detail.html` |
-| `/trips/<int:trip_id>/settlement/` | `trips:settlement` | `trips.views.trip_settlement` | `trips/trip_settlement.html` |
+| `/trips/<slug:slug>/` | `trips:detail` | `trips.views.trip_detail` | `trips/trip_detail.html` |
+| `/trips/<slug:slug>/settlement/` | `trips:settlement` | `trips.views.trip_settlement` | `trips/trip_settlement.html` |
+| `/trips/<int:trip_id>/` | `trips:by_id` | `trips.views.trip_by_id` | перенаправление на `/trips/<slug>/` |
 | `/expenses/` | `expenses:list` | `expenses.views.expenses` | `expenses/expense_list.html` |
 | `/expenses/statistics/` | `expenses:statistics` | `expenses.views.statistics` | `expenses/statistics.html` |
 | `/expenses/<int:expense_id>/` | `expenses:detail` | `expenses.views.expense_detail` | `expenses/expense_detail.html` |
+| `/admin/` | `admin:index` | админка Django | шаблоны `django.contrib.admin` |
 
 Маршрутизация двухуровневая: корневой `splitter/urls.py` подключает
 `homepage.urls`, `trips.urls` и `expenses.urls` через `include()`.
@@ -576,6 +578,99 @@ SQLite сравнивает без учета регистра только ла
 страницы открываются и показывают нули и сообщения «Поездок пока нет»,
 «Расходы не найдены.», «Данные отсутствуют.».
 
+## Админка и анализ SQL-запросов (ПР10)
+
+В ПР10 к проекту подключена административная панель Django, модели
+получили адрес поездки латиницей, статус расхода и признак крупного
+расхода, а число SQL-запросов страниц проверено панелью Django Debug
+Toolbar и тестами.
+
+### Административная панель
+
+Админка открывается по адресу http://127.0.0.1:8000/admin/ после
+создания администратора командой `python manage.py createsuperuser`.
+Заголовок админки — «Сервис расходов поездки», разделы подписаны
+по-русски («Поездки и участники», «Расходы»).
+
+| Модель | Список | Поиск и фильтры | Страница записи |
+|---|---|---|---|
+| `Trip` (`trips/admin.py`) | название, даты, бюджет, потрачено, участников, ссылка на сайт | поиск по названию и адресу, фильтр и навигация по дате начала | группы полей, адрес заполняется из названия при вводе, участники и расходы поездки на той же странице |
+| `Participant` | имя, поездка (ссылка), сколько расходов оплатил | поиск по имени и поездке, фильтр по поездке | оплаченные участником расходы |
+| `Expense` (`expenses/admin.py`) | название, поездка, плательщик, категория, сумма, дата, крупный, статус (меняется прямо в списке) | поиск по названию, плательщику и поездке, фильтры по статусу, категории, крупности и поездке, навигация по датам | группы полей, выбор участников в два столбца, проверка, что плательщик и участники из той же поездки |
+
+Действия над выбранными расходами: «Отменить выбранные расходы»
+и «Вернуть выбранные расходы в расчет».
+
+### Изменения моделей
+
+| Модель | Что добавлено |
+|---|---|
+| `Trip` | поле `slug` (уникальное, заполняется из названия транслитерацией: «Поездка в Казань» → `poezdka-v-kazan`, при повторе — `-2`, `-3`), метод `get_absolute_url()`, проверка в `clean()`: адрес не из одних цифр |
+| `Expense` | поле `status` (`Status`: «Учитывается» / «Отменен»), вычисляемое базой поле `is_large = GeneratedField(...)` (сумма от 10 000 ₽), `get_absolute_url()`, свойство `is_cancelled`, ограничение `expense_status_known` |
+| `ExpenseQuerySet` | менеджер `Expense.objects` с методами `active()`, `cancelled()`, `for_trip()`, `search()`, `with_relations()`; методы доступны и через связь: `trip.expenses.active()` |
+| все модели | `help_text` у полей, которые заполняют в админке |
+
+Отмененный расход виден в списках серым с отметкой «Отменен», но не
+входит в итоги поездки (`with_totals()`, `get_total()`), расчет долгов,
+сводку на главной и статистику. Категории и статусы вынесены
+в `expenses/choices.py`.
+
+### Миграции ПР10
+
+| Файл | Что делает |
+|---|---|
+| `trips/migrations/0002_trip_slug_and_help_texts.py` | добавляет `slug` (пока может быть пустым) и подсказки полей |
+| `trips/migrations/0003_fill_trip_slugs.py` | `RunPython`: заполняет адреса у уже существующих поездок |
+| `trips/migrations/0004_trip_slug_unique.py` | делает `slug` обязательным и уникальным |
+| `expenses/migrations/0002_expense_status_is_large.py` | добавляет `status`, `is_large`, ограничение статуса и подсказки полей |
+
+### Адреса поездок
+
+Страница поездки теперь открывается по адресу `/trips/<slug>/`
+(например, `/trips/poezdka-v-kazan/`), расчет — `/trips/<slug>/settlement/`.
+Старый адрес `/trips/<номер>/` оставлен и постоянно (код 301)
+перенаправляет на новый, поэтому сохраненные ссылки не ломаются.
+
+### Обработчик контекста
+
+`splitter/context_processors.py: site()` добавляет в каждый шаблон
+название сайта `site_name` и число поездок `trips_count` для меню.
+Число поездок передается методом `Trip.objects.count` без вызова, так
+что запрос выполняется, только если шаблон его выводит.
+
+### Django Debug Toolbar
+
+Панель подключается в `splitter/settings.py`, только когда `DEBUG = True`
+и не идут тесты (`TESTING`), и показывается для адреса `127.0.0.1`
+(`INTERNAL_IPS`). На вкладке SQL видно каждый запрос страницы, его время
+и план (`Expl`). Число запросов (без запросов сессии и пользователя):
+
+| Страница | ПР9 | ПР10 | Что изменилось |
+|---|---|---|---|
+| `/` | 3 | 4 | +1 число поездок для меню |
+| `/trips/` | 1 | 2 | +1 меню |
+| `/trips/<slug>/` | 4 | 5 | +1 меню |
+| `/trips/<slug>/settlement/` | 4 | 5 | +1 меню |
+| `/expenses/` | 4 | 5 | +1 меню |
+| `/expenses/<id>/` | 2 | 3 | +1 меню |
+| `/expenses/statistics/` | 5 | 8 | +1 меню, таблица по статусам, число крупных расходов |
+
+В админке (с запросами сессии и пользователя) без `list_select_related`
+и `select_related()` каждая строка списка расходов делала еще два
+запроса (поездка и плательщик), а каждый участник в выпадающем списке —
+запрос своей поездки (`Participant.__str__`):
+
+| Страница админки | без оптимизации | с оптимизацией |
+|---|---|---|
+| список расходов | 20 | 8 |
+| расход | 17 | 7 |
+| поездка (с участниками и расходами) | 18 | 10 |
+| список участников | 11 | 6 |
+
+Тесты `test_query_counts` и `test_list_queries_do_not_grow` проверяют
+число запросов через `assertNumQueries`: после добавления 10 расходов
+список в админке делает столько же запросов.
+
 ## Объектная модель (ПР3)
 
 Классы находятся в пакете `models` и импортируются из него:
@@ -693,6 +788,7 @@ trip-expense-splitter/
 │   ├── settings.py         # TEMPLATES["DIRS"], DATABASES → db.sqlite3
 │   ├── urls.py             # корневые маршруты
 │   ├── search.py           # поиск без учета регистра (кириллица)
+│   ├── context_processors.py   # название сайта и число поездок (ПР10)
 │   ├── asgi.py
 │   └── wsgi.py
 ├── templates/              # шаблоны уровня проекта
@@ -712,7 +808,9 @@ trip-expense-splitter/
 │   └── tests.py
 ├── trips/                  # Django-приложение: поездки и расчет
 │   ├── models.py           # модели Trip и Participant (ПР9)
-│   ├── migrations/         # миграции (ПР9)
+│   ├── slugs.py            # адрес поездки латиницей (ПР10)
+│   ├── admin.py            # админка поездок и участников (ПР10)
+│   ├── migrations/         # миграции (ПР9, ПР10)
 │   ├── templates/trips/
 │   │   ├── trip_list.html
 │   │   ├── trip_detail.html
@@ -724,14 +822,17 @@ trip-expense-splitter/
 │   ├── views.py
 │   └── tests.py
 ├── expenses/               # Django-приложение: расходы
-│   ├── models.py           # модель Expense (ПР9)
-│   ├── migrations/         # миграции (ПР9)
+│   ├── models.py           # модель Expense и ее менеджер (ПР9, ПР10)
+│   ├── choices.py          # категории и статусы расхода (ПР10)
+│   ├── admin.py            # админка расходов (ПР10)
+│   ├── migrations/         # миграции (ПР9, ПР10)
 │   ├── templates/expenses/
 │   │   ├── expense_list.html
 │   │   ├── expense_detail.html
 │   │   ├── statistics.html
 │   │   └── includes/
-│   │       └── category_badge.html
+│   │       ├── category_badge.html
+│   │       └── status_badge.html
 │   ├── urls.py
 │   ├── views.py
 │   └── tests.py
@@ -820,11 +921,17 @@ trip-expense-splitter/
   `ForeignKey` и `ManyToManyField`, миграции, перенос данных из базы ПР7
   в базу Django (`db/import_sqlite_to_orm.py`), страницы получают данные
   запросами ORM; поиск, сортировка и постраничный вывод списка расходов.
+- **ПР10** — административная панель Django для поездок, участников
+  и расходов (списки, поиск, фильтры, встроенные формы, действия),
+  адрес поездки `slug`, статус расхода и вычисляемое поле `is_large`,
+  менеджер `ExpenseQuerySet`, обработчик контекста, анализ SQL-запросов
+  в Django Debug Toolbar и проверка их числа в тестах.
 
 ## Требования
 
 - Python 3.10+;
 - Django 5.2;
+- django-debug-toolbar;
 - pytest;
 - flake8.
 
@@ -843,6 +950,7 @@ pip install -r requirements.txt
 ```bash
 python manage.py migrate              # создать таблицы в db.sqlite3
 python -m db.import_sqlite_to_orm     # перенести данные из базы ПР7
+python manage.py createsuperuser      # администратор для /admin/
 python manage.py check
 python manage.py runserver
 ```
@@ -878,7 +986,7 @@ python main.py
 
 ```bash
 pytest -v                  # тесты предметной области (ПР1–ПР3) и базы ПР7
-python manage.py test      # тесты моделей, переноса данных и страниц (ПР5–ПР9)
+python manage.py test      # тесты моделей, страниц и админки (ПР5–ПР10)
 ```
 
 Тесты проверяют создание объектов и значения атрибутов, методы и `__str__`
@@ -895,6 +1003,10 @@ Django, которую заполняет тот же перенос JSON → б
 сортировку, страницы списка, статистику, отбор по сумме категории),
 подключает статические файлы, что имена маршрутов дают правильные адреса
 и что для несуществующих номеров и адресов возвращается 404.
+Тесты ПР10 проверяют адреса поездок и перенаправление со старых адресов,
+статус расхода во всех итогах и расчете, методы менеджера, пересчет
+`is_large` базой, страницы, действия и проверки формы в админке,
+обработчик контекста и число SQL-запросов страниц (`assertNumQueries`).
 
 ## Проверка качества кода
 
@@ -909,7 +1021,6 @@ flake8 . --extend-exclude=venv
 
 На следующих этапах планируется:
 
-- административная панель Django для поездок, участников и расходов;
 - формы Django для создания поездок, участников и расходов;
 - реализация пользователей, регистрации и разграничения доступа к поездкам;
 - разработка REST API;

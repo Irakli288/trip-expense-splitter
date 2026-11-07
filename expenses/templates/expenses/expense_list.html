@@ -17,7 +17,7 @@
                    placeholder="Название расхода, плательщик или поездка"
                    value="{{ query }}">
         </div>
-        <div class="col-sm-3">
+        <div class="col-sm-2">
             <label for="trip" class="form-label">Поездка</label>
             <select id="trip" name="trip" class="form-select">
                 <option value="0">Все поездки</option>
@@ -26,12 +26,21 @@
                 {% endfor %}
             </select>
         </div>
-        <div class="col-sm-3">
+        <div class="col-sm-2">
             <label for="category" class="form-label">Категория</label>
             <select id="category" name="category" class="form-select">
                 <option value="">Все категории</option>
                 {% for category in categories %}
                     <option value="{{ category }}" {% if category == selected_category %}selected{% endif %}>{{ category|capfirst }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-sm-2">
+            <label for="status" class="form-label">Статус</label>
+            <select id="status" name="status" class="form-select">
+                <option value="">Все</option>
+                {% for value, label in statuses %}
+                    <option value="{{ value }}" {% if value == selected_status %}selected{% endif %}>{{ label }}</option>
                 {% endfor %}
             </select>
         </div>
@@ -55,6 +64,7 @@
 
     <p class="text-body-secondary">
         Найдено расходов: {{ summary.expenses_count }}
+        {% if summary.cancelled_count %}(отменено: {{ summary.cancelled_count }}){% endif %}
         {% if page_obj.paginator.num_pages > 1 %}· страница {{ page_obj.number }} из {{ page_obj.paginator.num_pages }}{% endif %}
     </p>
     <table class="table table-hover">
@@ -70,15 +80,16 @@
         </thead>
         <tbody>
             {% for expense in expenses %}
-                <tr>
+                <tr {% if expense.is_cancelled %}class="text-body-secondary expense-cancelled"{% endif %}>
                     <td>{{ expense.expense_date|date:"d.m.Y" }}</td>
                     <td>
                         <a href="{% url 'expenses:detail' expense.id %}">
                             {{ expense.title|default:"Без названия" }}
                         </a>
+                        {% include "expenses/includes/status_badge.html" %}
                     </td>
                     <td>
-                        <a href="{% url 'trips:detail' expense.trip_id %}">
+                        <a href="{{ expense.trip.get_absolute_url }}">
                             {{ expense.trip.name }}
                         </a>
                     </td>
@@ -111,5 +122,5 @@
             </ul>
         </nav>
     {% endif %}
-    <p class="fw-bold">Итого: {{ summary.expenses_total|floatformat:"2g" }} ₽</p>
+    <p class="fw-bold">Итого без отмененных: {{ summary.expenses_total|floatformat:"2g" }} ₽</p>
 {% endblock %}

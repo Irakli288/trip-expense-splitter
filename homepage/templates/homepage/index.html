@@ -34,6 +34,9 @@
             </div></div>
         </div>
     </div>
+    {% if summary.cancelled_count %}
+        <p class="text-body-secondary">Отмененных расходов: {{ summary.cancelled_count }}, в итоги они не входят.</p>
+    {% endif %}
     <p>Основные разделы:</p>
     <a href="{% url 'trips:list' %}" class="btn btn-primary me-2">Поездки</a>
     <a href="{% url 'expenses:list' %}" class="btn btn-secondary me-2">Расходы</a>

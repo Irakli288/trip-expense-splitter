@@ -3,13 +3,16 @@
     <div class="container">
         <a class="navbar-brand d-flex align-items-center" href="{% url 'homepage:index' %}">
             <img src="{% static 'homepage/img/logo.png' %}" alt="Логотип сервиса" class="splitter-logo">
-            Сервис расходов поездки
+            {{ site_name }}
         </a>
         <div class="navbar-nav flex-wrap">
             <a class="nav-link {% if request.resolver_match.app_name == 'homepage' %}active{% endif %}" href="{% url 'homepage:index' %}">Главная</a>
-            <a class="nav-link {% if request.resolver_match.app_name == 'trips' %}active{% endif %}" href="{% url 'trips:list' %}">Поездки</a>
+            <a class="nav-link {% if request.resolver_match.app_name == 'trips' %}active{% endif %}" href="{% url 'trips:list' %}">Поездки <span class="badge bg-light text-primary">{{ trips_count }}</span></a>
             <a class="nav-link {% if request.resolver_match.app_name == 'expenses' and request.resolver_match.url_name != 'statistics' %}active{% endif %}" href="{% url 'expenses:list' %}">Расходы</a>
             <a class="nav-link {% if request.resolver_match.view_name == 'expenses:statistics' %}active{% endif %}" href="{% url 'expenses:statistics' %}">Статистика</a>
+            {% if user.is_staff %}
+                <a class="nav-link" href="{% url 'admin:index' %}">Админка</a>
+            {% endif %}
         </div>
     </div>
 </nav>

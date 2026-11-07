@@ -14,6 +14,7 @@
     2. Добавить в urlpatterns: path('blog/', include('blog.urls'))
 """
 
+from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path
 
@@ -23,3 +24,8 @@ urlpatterns = [
     path("trips/", include("trips.urls")),
     path("expenses/", include("expenses.urls")),
 ]
+
+if settings.DEBUG_TOOLBAR:
+    from debug_toolbar.toolbar import debug_toolbar_urls
+
+    urlpatterns += debug_toolbar_urls()
