@@ -10,7 +10,7 @@
                 участников: {{ trip.participants_count }} ·
                 расходов: {{ trip.expenses_count }}
             </p>
-            <a href="{% url 'trips:detail' trip.id %}" class="btn btn-primary btn-sm">
+            <a href="{{ trip.get_absolute_url }}" class="btn btn-primary btn-sm">
                 Подробнее
             </a>
         </div>

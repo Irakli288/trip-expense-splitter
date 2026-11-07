@@ -41,7 +41,7 @@
                 </ul>
             </div>
         </div>
-        <a href="{% url 'trips:detail' trip.id %}" class="btn btn-outline-secondary">
+        <a href="{{ trip.get_absolute_url }}" class="btn btn-outline-secondary">
             ← к поездке
         </a>
     {% else %}

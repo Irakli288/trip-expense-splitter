@@ -2,14 +2,13 @@ import math
 from decimal import Decimal
 
 from django.core.paginator import Paginator
-from django.db.models import Avg, Count, F, Max, Sum
+from django.db.models import Avg, Count, F, Max, Q, Sum
 from django.db.models.functions import Coalesce
 from django.shortcuts import render
 
-from splitter.search import text_search
 from trips.models import BUDGET_WARNING_SHARE, Participant, Trip
 
-from .models import Category, Expense
+from .models import Category, Expense, Status
 
 DEFAULT_MIN_TOTAL = 5000
 EXPENSES_PER_PAGE = 5
@@ -49,29 +48,36 @@ def expenses(request):
     if category not in Category.values:
         category = ""
     min_amount = parse_number(request.GET.get("min_amount"), 0, Decimal)
+    status = request.GET.get("status", "")
+    if status not in Status.values:
+        status = ""
     query = request.GET.get("q", "").strip()
     sort = request.GET.get("sort", DEFAULT_SORT)
     if sort not in SORT_OPTIONS:
         sort = DEFAULT_SORT
 
     # Поездку и плательщика берем тем же запросом, что и расходы.
-    found = Expense.objects.select_related("trip", "payer")
+    found = Expense.objects.with_relations()
     if trip_id:
-        found = found.filter(trip_id=trip_id)
+        found = found.for_trip(trip_id)
+    if status:
+        found = found.filter(status=status)
     if category:
         found = found.filter(category=category)
     if min_amount:
         found = found.filter(amount__gte=min_amount)
     if query:
         # Ищем в названии расхода, имени плательщика и названии поездки.
-        found = found.filter(
-            text_search(query, "title", "payer__name", "trip__name")
-        )
+        found = found.search(query)
     found = found.order_by(*SORT_OPTIONS[sort][1])
 
+    # В итог входят только действующие расходы из найденных.
     summary = found.aggregate(
         expenses_count=Count("pk"),
-        expenses_total=Coalesce(Sum("amount"), Decimal("0")),
+        cancelled_count=Count("pk", filter=Q(status=Status.CANCELLED)),
+        expenses_total=Coalesce(
+            Sum("amount", filter=Q(status=Status.ACTIVE)), Decimal("0")
+        ),
     )
     # Неправильный номер страницы (?page=abc или ?page=100)
     # заменяется ближайшей существующей страницей.
@@ -84,11 +90,13 @@ def expenses(request):
         "summary": summary,
         "trips": Trip.objects.only("name"),
         "categories": Category.values,
+        "statuses": Status.choices,
         "sort_options": {
             key: label for key, (label, _) in SORT_OPTIONS.items()
         },
         "selected_trip": trip_id,
         "selected_category": category,
+        "selected_status": status,
         "selected_sort": sort,
         "query": query,
         "min_amount": request.GET.get("min_amount", ""),
@@ -98,9 +106,7 @@ def expenses(request):
 
 def expense_detail(request, expense_id):
     try:
-        expense = Expense.objects.select_related("trip", "payer").get(
-            pk=expense_id
-        )
+        expense = Expense.objects.with_relations().get(pk=expense_id)
     except Expense.DoesNotExist:
         expense = None
     shares = list(expense.split_between.order_by("pk")) if expense else []
@@ -121,8 +127,17 @@ def statistics(request):
     min_total = parse_number(
         request.GET.get("min_total"), DEFAULT_MIN_TOTAL, Decimal
     )
+    # Статистика считается только по действующим расходам.
+    active = Expense.objects.active()
+    paid_active = Q(paid_expenses__status=Status.ACTIVE)
     # values("category") + annotate() — это GROUP BY category.
-    by_category = Expense.objects.values("category").order_by()
+    by_category = active.values("category").order_by()
+    # Сколько расходов и на какую сумму в каждом статусе.
+    by_status = (
+        Expense.objects.values("status")
+        .order_by("status")
+        .annotate(expenses_count=Count("pk"), total=Sum("amount"))
+    )
     context = {
         "categories": by_category.annotate(
             expenses_count=Count("pk"),
@@ -133,8 +148,11 @@ def statistics(request):
         # Coalesce дает 0 тем, кто еще ни за что не платил:
         # такие участники тоже должны попасть в таблицу.
         "payers": Participant.objects.select_related("trip").annotate(
-            expenses_count=Count("paid_expenses"),
-            paid_total=Coalesce(Sum("paid_expenses__amount"), Decimal("0")),
+            expenses_count=Count("paid_expenses", filter=paid_active),
+            paid_total=Coalesce(
+                Sum("paid_expenses__amount", filter=paid_active),
+                Decimal("0"),
+            ),
         ).order_by("-paid_total", "name"),
         # Фильтр по уже посчитанной сумме — в SQL это HAVING.
         "big_categories": by_category.annotate(
@@ -144,8 +162,14 @@ def statistics(request):
         .exclude(budget__isnull=True)
         .filter(total__gte=F("budget") * BUDGET_WARNING_SHARE)
         .order_by((F("total") / F("budget")).desc()),
-        "top_expenses": Expense.objects.select_related("trip")
+        "top_expenses": active.select_related("trip")
         .order_by("-amount", "pk")[:3],
+        "by_status": [
+            dict(row, label=Status(row["status"]).label)
+            for row in by_status
+        ],
+        # is_large считает сама база, поэтому по нему можно фильтровать.
+        "large_count": active.filter(is_large=True).count(),
         "min_total": request.GET.get("min_total", DEFAULT_MIN_TOTAL),
     }
     return render(request, "expenses/statistics.html", context)

@@ -1,0 +1,3 @@
+{% if expense.is_cancelled %}
+    <span class="badge bg-secondary status-badge">{{ expense.get_status_display }}</span>
+{% endif %}
