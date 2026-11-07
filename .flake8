@@ -1,2 +1,3 @@
 [flake8]
-exclude = .git,__pycache__,venv,.venv,env
+# Миграции пишет сам Django командой makemigrations, их не правим вручную.
+exclude = .git,__pycache__,venv,.venv,env,*/migrations/*
