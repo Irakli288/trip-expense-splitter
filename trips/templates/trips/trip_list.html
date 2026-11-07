@@ -4,10 +4,16 @@
 
 {% block content %}
     <h1>Поездки</h1>
+    <form method="get" class="d-flex gap-2 mb-3 trip-search" role="search">
+        <label for="q" class="visually-hidden">Название поездки</label>
+        <input type="search" id="q" name="q" class="form-control"
+               placeholder="Поиск по названию" value="{{ query }}">
+        <button type="submit" class="btn btn-primary">Найти</button>
+    </form>
     <p class="text-body-secondary">Всего поездок: {{ trips|length }}</p>
     {% for trip in trips %}
         {% include "trips/includes/trip_card.html" %}
     {% empty %}
-        <p>Поездок пока нет.</p>
+        <p>{% if query %}Поездки не найдены.{% else %}Поездок пока нет.{% endif %}</p>
     {% endfor %}
 {% endblock %}
