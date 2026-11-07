@@ -76,8 +76,8 @@
                 <tbody>
                     {% for payer in payers %}
                         <tr>
-                            <td>{{ payer.participant_name }}</td>
-                            <td>{{ payer.trip_name }}</td>
+                            <td>{{ payer.name }}</td>
+                            <td>{{ payer.trip.name }}</td>
                             <td class="text-end">{{ payer.expenses_count }}</td>
                             <td class="text-end">{{ payer.paid_total|floatformat:"2g" }} ₽</td>
                         </tr>

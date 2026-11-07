@@ -1,158 +1,30 @@
-import sqlite3
+import math
+from decimal import Decimal
 
+from django.core.paginator import Paginator
+from django.db.models import Avg, Count, F, Max, Sum
+from django.db.models.functions import Coalesce
 from django.shortcuts import render
 
-from db.database import get_connection
-from models.expenses import CATEGORIES, calculate_share
+from splitter.search import text_search
+from trips.models import BUDGET_WARNING_SHARE, Participant, Trip
 
-# Запрос 1 из sql/queries.sql: поездки для списка в форме поиска.
-TRIPS_QUERY = """
-    SELECT
-        id,
-        name
-    FROM trips
-    ORDER BY start_date;
-"""
-
-# Запрос 4: ищем расходы по поездке, категории и минимальной сумме.
-# Часть (? = 0 OR ...) выключает фильтр, если поездка не выбрана,
-# а (? = '' OR ...) делает то же, если не выбрана категория.
-EXPENSES_QUERY = """
-    SELECT
-        expenses.id,
-        strftime('%d.%m.%Y', expenses.expense_date) AS expense_date_ru,
-        expenses.title,
-        expenses.category,
-        expenses.amount,
-        trips.id AS trip_id,
-        trips.name AS trip_name,
-        participants.name AS payer_name
-    FROM expenses
-    JOIN trips
-        ON expenses.trip_id = trips.id
-    JOIN participants
-        ON expenses.payer_id = participants.id
-    WHERE (? = 0 OR expenses.trip_id = ?)
-        AND (? = '' OR expenses.category = ?)
-        AND expenses.amount >= ?
-    ORDER BY expenses.expense_date, expenses.id;
-"""
-
-# Запрос 5: сколько расходов нашлось и на какую сумму.
-EXPENSES_TOTAL_QUERY = """
-    SELECT
-        COUNT(*) AS expenses_count,
-        COALESCE(SUM(amount), 0) AS expenses_total
-    FROM expenses
-    WHERE (? = 0 OR trip_id = ?)
-        AND (? = '' OR category = ?)
-        AND amount >= ?;
-"""
-
-# Запрос 8: расход по номеру вместе с поездкой и плательщиком.
-EXPENSE_QUERY = """
-    SELECT
-        expenses.id,
-        expenses.title,
-        expenses.amount,
-        expenses.category,
-        strftime('%d.%m.%Y', expenses.expense_date) AS expense_date_ru,
-        trips.id AS trip_id,
-        trips.name AS trip_name,
-        participants.name AS payer_name
-    FROM expenses
-    JOIN trips
-        ON expenses.trip_id = trips.id
-    JOIN participants
-        ON expenses.payer_id = participants.id
-    WHERE expenses.id = ?;
-"""
-
-# Запрос 9: на кого делится расход.
-SHARES_QUERY = """
-    SELECT
-        participants.id,
-        participants.name
-    FROM expense_shares
-    JOIN participants
-        ON expense_shares.participant_id = participants.id
-    WHERE expense_shares.expense_id = ?
-    ORDER BY participants.id;
-"""
-
-# Запрос 14: сколько потрачено по каждой категории.
-CATEGORY_TOTALS_QUERY = """
-    SELECT
-        category,
-        COUNT(*) AS expenses_count,
-        SUM(amount) AS total,
-        ROUND(AVG(amount), 2) AS average_amount,
-        MAX(amount) AS max_amount
-    FROM expenses
-    GROUP BY category
-    ORDER BY total DESC;
-"""
-
-# Запрос 15: сколько заплатил каждый участник.
-PAYERS_QUERY = """
-    SELECT
-        participants.name AS participant_name,
-        trips.name AS trip_name,
-        COUNT(expenses.id) AS expenses_count,
-        COALESCE(SUM(expenses.amount), 0) AS paid_total
-    FROM participants
-    JOIN trips
-        ON participants.trip_id = trips.id
-    LEFT JOIN expenses
-        ON expenses.payer_id = participants.id
-    GROUP BY participants.id
-    ORDER BY paid_total DESC, participants.name;
-"""
-
-# Запрос 16: категории, где потрачено не меньше заданной суммы.
-BIG_CATEGORIES_QUERY = """
-    SELECT
-        category,
-        SUM(amount) AS total
-    FROM expenses
-    GROUP BY category
-    HAVING SUM(amount) >= ?
-    ORDER BY total DESC;
-"""
-
-# Запрос 17: поездки, где потрачено 80% бюджета и больше.
-BUDGET_ALERTS_QUERY = """
-    SELECT
-        trips.id,
-        trips.name,
-        trips.budget,
-        SUM(expenses.amount) AS total,
-        CAST(SUM(expenses.amount) * 100 / trips.budget AS INTEGER)
-            AS used_percent
-    FROM trips
-    JOIN expenses
-        ON expenses.trip_id = trips.id
-    WHERE trips.budget IS NOT NULL
-    GROUP BY trips.id
-    HAVING SUM(expenses.amount) >= trips.budget * 0.8
-    ORDER BY used_percent DESC;
-"""
-
-# Запрос 3: три самых дорогих расхода.
-TOP_EXPENSES_QUERY = """
-    SELECT
-        expenses.id,
-        expenses.title,
-        expenses.amount,
-        trips.name AS trip_name
-    FROM expenses
-    JOIN trips
-        ON expenses.trip_id = trips.id
-    ORDER BY expenses.amount DESC
-    LIMIT 3;
-"""
+from .models import Category, Expense
 
 DEFAULT_MIN_TOTAL = 5000
+EXPENSES_PER_PAGE = 5
+
+# Какие сортировки можно выбрать в списке расходов. В order_by()
+# попадают только поля из этого словаря, а не то, что пришло в адресе.
+SORT_OPTIONS = {
+    "date": ("сначала ранние", ["expense_date", "pk"]),
+    "-date": ("сначала поздние", ["-expense_date", "-pk"]),
+    "amount": ("сначала дешевые", ["amount", "pk"]),
+    "-amount": ("сначала дорогие", ["-amount", "pk"]),
+    "title": ("по названию", ["title", "pk"]),
+    "trip": ("по поездке", ["trip__name", "expense_date", "pk"]),
+}
+DEFAULT_SORT = "date"
 
 
 def parse_number(text, default=0, number_type=float):
@@ -163,54 +35,79 @@ def parse_number(text, default=0, number_type=float):
     """
     try:
         value = number_type(text)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, ArithmeticError):
         return default
-    return value if value >= 0 else default
+    # Отсекаем nan и бесконечность, а потом отрицательные числа.
+    if not math.isfinite(value) or value < 0:
+        return default
+    return value
 
 
 def expenses(request):
     trip_id = parse_number(request.GET.get("trip"), 0, int)
     category = request.GET.get("category", "")
-    if category not in CATEGORIES:
+    if category not in Category.values:
         category = ""
-    min_amount = parse_number(request.GET.get("min_amount"), 0)
-    params = [trip_id, trip_id, category, category, min_amount]
+    min_amount = parse_number(request.GET.get("min_amount"), 0, Decimal)
+    query = request.GET.get("q", "").strip()
+    sort = request.GET.get("sort", DEFAULT_SORT)
+    if sort not in SORT_OPTIONS:
+        sort = DEFAULT_SORT
 
-    conn = get_connection()
-    conn.row_factory = sqlite3.Row
-    try:
-        expenses_data = conn.execute(EXPENSES_QUERY, params).fetchall()
-        summary = conn.execute(EXPENSES_TOTAL_QUERY, params).fetchone()
-        trips_data = conn.execute(TRIPS_QUERY).fetchall()
-    finally:
-        conn.close()
+    # Поездку и плательщика берем тем же запросом, что и расходы.
+    found = Expense.objects.select_related("trip", "payer")
+    if trip_id:
+        found = found.filter(trip_id=trip_id)
+    if category:
+        found = found.filter(category=category)
+    if min_amount:
+        found = found.filter(amount__gte=min_amount)
+    if query:
+        # Ищем в названии расхода, имени плательщика и названии поездки.
+        found = found.filter(
+            text_search(query, "title", "payer__name", "trip__name")
+        )
+    found = found.order_by(*SORT_OPTIONS[sort][1])
+
+    summary = found.aggregate(
+        expenses_count=Count("pk"),
+        expenses_total=Coalesce(Sum("amount"), Decimal("0")),
+    )
+    # Неправильный номер страницы (?page=abc или ?page=100)
+    # заменяется ближайшей существующей страницей.
+    page_obj = Paginator(found, EXPENSES_PER_PAGE).get_page(
+        request.GET.get("page")
+    )
     context = {
-        "expenses": expenses_data,
+        "expenses": page_obj.object_list,
+        "page_obj": page_obj,
         "summary": summary,
-        "trips": trips_data,
-        "categories": CATEGORIES,
+        "trips": Trip.objects.only("name"),
+        "categories": Category.values,
+        "sort_options": {
+            key: label for key, (label, _) in SORT_OPTIONS.items()
+        },
         "selected_trip": trip_id,
         "selected_category": category,
+        "selected_sort": sort,
+        "query": query,
         "min_amount": request.GET.get("min_amount", ""),
     }
     return render(request, "expenses/expense_list.html", context)
 
 
 def expense_detail(request, expense_id):
-    conn = get_connection()
-    conn.row_factory = sqlite3.Row
     try:
-        expense = conn.execute(EXPENSE_QUERY, [expense_id]).fetchone()
-        shares = []
-        if expense is not None:
-            shares = conn.execute(SHARES_QUERY, [expense_id]).fetchall()
-    finally:
-        conn.close()
+        expense = Expense.objects.select_related("trip", "payer").get(
+            pk=expense_id
+        )
+    except Expense.DoesNotExist:
+        expense = None
+    shares = list(expense.split_between.order_by("pk")) if expense else []
     context = {
         "expense": expense,
         "shares": shares,
-        "share": (calculate_share(expense["amount"], len(shares))
-                  if shares else 0),
+        "share": expense.get_share(len(shares)) if shares else 0,
     }
     return render(
         request,
@@ -221,20 +118,34 @@ def expense_detail(request, expense_id):
 
 
 def statistics(request):
-    min_total = parse_number(request.GET.get("min_total"), DEFAULT_MIN_TOTAL)
-    conn = get_connection()
-    conn.row_factory = sqlite3.Row
-    try:
-        context = {
-            "categories": conn.execute(CATEGORY_TOTALS_QUERY).fetchall(),
-            "payers": conn.execute(PAYERS_QUERY).fetchall(),
-            "big_categories": conn.execute(
-                BIG_CATEGORIES_QUERY, [min_total]
-            ).fetchall(),
-            "budget_alerts": conn.execute(BUDGET_ALERTS_QUERY).fetchall(),
-            "top_expenses": conn.execute(TOP_EXPENSES_QUERY).fetchall(),
-            "min_total": request.GET.get("min_total", DEFAULT_MIN_TOTAL),
-        }
-    finally:
-        conn.close()
+    min_total = parse_number(
+        request.GET.get("min_total"), DEFAULT_MIN_TOTAL, Decimal
+    )
+    # values("category") + annotate() — это GROUP BY category.
+    by_category = Expense.objects.values("category").order_by()
+    context = {
+        "categories": by_category.annotate(
+            expenses_count=Count("pk"),
+            total=Sum("amount"),
+            average_amount=Avg("amount"),
+            max_amount=Max("amount"),
+        ).order_by("-total"),
+        # Coalesce дает 0 тем, кто еще ни за что не платил:
+        # такие участники тоже должны попасть в таблицу.
+        "payers": Participant.objects.select_related("trip").annotate(
+            expenses_count=Count("paid_expenses"),
+            paid_total=Coalesce(Sum("paid_expenses__amount"), Decimal("0")),
+        ).order_by("-paid_total", "name"),
+        # Фильтр по уже посчитанной сумме — в SQL это HAVING.
+        "big_categories": by_category.annotate(
+            total=Sum("amount"),
+        ).filter(total__gte=min_total).order_by("-total"),
+        "budget_alerts": Trip.objects.with_totals()
+        .exclude(budget__isnull=True)
+        .filter(total__gte=F("budget") * BUDGET_WARNING_SHARE)
+        .order_by((F("total") / F("budget")).desc()),
+        "top_expenses": Expense.objects.select_related("trip")
+        .order_by("-amount", "pk")[:3],
+        "min_total": request.GET.get("min_total", DEFAULT_MIN_TOTAL),
+    }
     return render(request, "expenses/statistics.html", context)

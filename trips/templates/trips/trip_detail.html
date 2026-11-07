@@ -15,7 +15,7 @@
                 <h1 class="card-title h3">{{ trip.name }}</h1>
                 <p class="card-text">
                     <strong>Даты:</strong>
-                    {{ trip.start_date_ru }} – {{ trip.end_date_ru }}
+                    {{ trip.start_date|date:"d.m.Y" }} – {{ trip.end_date|date:"d.m.Y" }}
                     ({{ trip.duration }} дн.)
                 </p>
                 <p class="card-text">
@@ -76,7 +76,7 @@
                                     </a>
                                 </td>
                                 <td>{% include "expenses/includes/category_badge.html" %}</td>
-                                <td>{{ expense.payer_name }}</td>
+                                <td>{{ expense.payer.name }}</td>
                                 <td class="text-end">{{ expense.amount|floatformat:"2g" }} ₽</td>
                             </tr>
                         {% empty %}
