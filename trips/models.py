@@ -7,12 +7,21 @@
 
 from decimal import Decimal
 
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Count, F, OuterRef, Q, Subquery, Sum
 from django.db.models.functions import Coalesce
+from django.urls import reverse
+
+from expenses.choices import Status
+
+from .slugs import unique_slug
 
 # С какой доли потраченного бюджета показываем предупреждение.
 BUDGET_WARNING_SHARE = Decimal("0.8")
+
+# В итоги поездки входят только расходы, которые не отменены.
+ACTIVE_EXPENSES = Q(expenses__status=Status.ACTIVE)
 
 
 class TripQuerySet(models.QuerySet):
@@ -25,6 +34,7 @@ class TripQuerySet(models.QuerySet):
         participants_count — сколько участников. Участников считаем
         отдельным подзапросом: если присоединить к поездке и расходы,
         и участников сразу, сумма расходов умножится на число участников.
+        Отмененные расходы в сумму и количество не входят.
         """
         participants_count = (
             Participant.objects
@@ -35,8 +45,11 @@ class TripQuerySet(models.QuerySet):
             .values("count")
         )
         return self.annotate(
-            total=Coalesce(Sum("expenses__amount"), Decimal("0")),
-            expenses_count=Count("expenses"),
+            total=Coalesce(
+                Sum("expenses__amount", filter=ACTIVE_EXPENSES),
+                Decimal("0"),
+            ),
+            expenses_count=Count("expenses", filter=ACTIVE_EXPENSES),
             participants_count=Coalesce(Subquery(participants_count), 0),
         )
 
@@ -45,6 +58,15 @@ class Trip(models.Model):
     """Совместная поездка: название, даты и бюджет."""
 
     name = models.CharField("название", max_length=200)
+    # Часть адреса страницы: /trips/poezdka-v-kazan/. Если оставить
+    # пустым, заполнится само по названию при сохранении.
+    slug = models.SlugField(
+        "адрес",
+        max_length=200,
+        unique=True,
+        blank=True,
+        help_text="Латиница, цифры и дефис. Пусто — возьмется из названия.",
+    )
     start_date = models.DateField("дата начала")
     end_date = models.DateField("дата окончания")
     # Бюджет можно не задавать, тогда в поле будет NULL.
@@ -54,6 +76,7 @@ class Trip(models.Model):
         decimal_places=2,
         null=True,
         blank=True,
+        help_text="Можно не заполнять.",
     )
 
     objects = TripQuerySet.as_manager()
@@ -73,6 +96,23 @@ class Trip(models.Model):
     def __str__(self):
         return self.name
 
+    def clean(self):
+        super().clean()
+        # Адрес из одних цифр спутался бы со старым адресом /trips/<номер>/.
+        if self.slug and self.slug.isdigit():
+            raise ValidationError(
+                {"slug": "Адрес не может состоять только из цифр."}
+            )
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            others = Trip.objects.exclude(pk=self.pk)
+            self.slug = unique_slug(others, self.name)
+        super().save(*args, **kwargs)
+
+    def get_absolute_url(self):
+        return reverse("trips:detail", kwargs={"slug": self.slug})
+
     @property
     def duration(self):
         """Сколько дней длится поездка, считая первый и последний день."""
@@ -83,10 +123,12 @@ class Trip(models.Model):
 
         Если поездку взяли через with_totals(), сумма уже посчитана
         в том же запросе. Иначе считаем ее отдельным запросом.
+        Отмененные расходы не считаются.
         """
         total = getattr(self, "total", None)
         if total is None:
-            total = self.expenses.aggregate(
+            active = self.expenses.filter(status=Status.ACTIVE)
+            total = active.aggregate(
                 total=Coalesce(Sum("amount"), Decimal("0"))
             )["total"]
         return total
@@ -132,7 +174,11 @@ class Participant(models.Model):
         related_name="participants",
         verbose_name="поездка",
     )
-    name = models.CharField("имя", max_length=100)
+    name = models.CharField(
+        "имя",
+        max_length=100,
+        help_text="В одной поездке имена не повторяются.",
+    )
 
     class Meta:
         ordering = ["name", "pk"]
