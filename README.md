@@ -11,7 +11,9 @@
 Консольная версия приложения (ПР3) дополнена веб-интерфейсом на Django (ПР5):
 поездки, расходы и итоговый расчет можно просматривать в браузере.
 В ПР6 страницы переведены на шаблоны Django. В ПР7 данные перенесены
-из JSON в базу SQLite: страницы сайта получают их SQL-запросами.
+из JSON в базу SQLite: страницы сайта получали их SQL-запросами.
+В ПР9 данные описаны моделями Django, а страницы получают их через
+Django ORM.
 
 ## Используемые технологии
 
@@ -21,8 +23,9 @@
 - HTML5 — разметка веб-страниц;
 - CSS3 и Bootstrap 5.3 (подключается через CDN) — оформление страниц;
 - JavaScript — небольшое поведение интерфейса;
-- SQLite и модуль `sqlite3` стандартной библиотеки — база данных (ПР7);
-- SQL — выборка и обработка данных;
+- SQLite — база данных;
+- Django ORM — модели, миграции и запросы к базе (ПР9);
+- модуль `sqlite3` и SQL — исходная база ПР7 и перенос данных из нее;
 - JSON — исходные данные и хранение консольной версии;
 - pytest — автоматизированные тесты;
 - flake8 — проверка качества кода.
@@ -62,8 +65,10 @@
 - контроль бюджета поездки (предупреждение при 80% и при превышении);
 - расчет баланса каждого участника и списка переводов «кто → кому → сколько»;
 - сохранение всех данных в JSON-файлах и загрузка при запуске;
-- перенос данных из JSON в базу SQLite и работа веб-страниц с базой (ПР7);
-- поиск расходов по поездке, категории и минимальной сумме;
+- перенос данных из JSON в базу SQLite (ПР7), а из нее в базу Django (ПР9);
+- поиск поездок по названию;
+- поиск расходов по названию, плательщику и поездке, отбор по поездке,
+  категории и минимальной сумме, сортировка и постраничный вывод (ПР9);
 - статистика: итоги по категориям, кто сколько оплатил, крупные категории,
   поездки с почти исчерпанным бюджетом;
 - обработка некорректного ввода и ошибок файлов без аварийного завершения.
@@ -74,9 +79,9 @@ Django добавлен к существующему проекту: `manage.py
 репозитория рядом с `main.py`, а код ПР3 (пакет `models`, `storage.py`,
 JSON-файлы, тесты, консольное меню) сохранен и продолжает работать.
 До ПР7 страницы строились по объектам `Trip`, `Participant`, `Expense`
-и `Settlement`, которые `storage.py` загружал из JSON. С ПР7 страницы
-получают данные из базы SQLite (раздел «База данных SQLite (ПР7)»).
-Django ORM и Django-модели пока не используются, формы еще не реализованы.
+и `Settlement`, которые `storage.py` загружал из JSON. В ПР7 страницы
+получали данные SQL-запросами из базы SQLite, с ПР9 — через модели
+Django и ORM (раздел «Модели Django и ORM (ПР9)»). Формы еще не реализованы.
 
 В ПР6 веб-интерфейс переведен на шаблоны Django (Django Template Language).
 View-функции больше не собирают HTML-строки: они загружают данные,
@@ -174,8 +179,8 @@ JavaScript. Дочерние шаблоны начинаются с `{% extends 
   активный раздел подсвечивается по `request.resolver_match.app_name`
   (для статистики — по `request.resolver_match.view_name`);
 - `trips/includes/trip_card.html` — карточка поездки в списке поездок,
-  подключается в цикле `{% for trip in trips %}` и получает строку
-  результата SQL-запроса как переменную `trip`;
+  подключается в цикле `{% for trip in trips %}` и получает объект
+  модели `Trip` как переменную `trip`;
 - `trips/includes/budget_badge.html` — цветная отметка бюджета
   (в списке поездок и на странице поездки);
 - `expenses/includes/category_badge.html` — категория расхода
@@ -184,15 +189,16 @@ JavaScript. Дочерние шаблоны начинаются с `{% extends 
   `{% include "expenses/includes/category_badge.html" with expense=item %}`.
 
 **Контекст.** View-функции передают данные словарем контекста, например
-в `trips.views.trips` (ПР7):
+в `trips.views.trips` (ПР9):
 
 ```python
-trips_data = conn.execute(TRIPS_QUERY).fetchall()   # строки sqlite3.Row
+trips_data = Trip.objects.with_totals()             # QuerySet объектов Trip
 return render(request, "trips/trip_list.html", {"trips": trips_data})
 ```
 
-В шаблоне к полям строки результата обращаются по имени столбца через
-точку: `{{ trip.name }}`, `{{ trip.total }}`, `{{ expense.payer_name }}`.
+В шаблоне к полям объекта и связанных объектов обращаются через точку:
+`{{ trip.name }}`, `{{ trip.total }}`, `{{ expense.payer.name }}`,
+`{{ expense.trip.name }}`.
 
 **Циклы и условия.** Списки выводятся циклом `{% for %}`, пустая
 коллекция обрабатывается веткой `{% empty %}` («Поездок пока нет»,
@@ -203,9 +209,9 @@ return render(request, "trips/trip_list.html", {"trips": trips_data})
 (`row.balance > 0`, `< 0`, `= 0`) и ветку «объект не найден».
 
 Уровень расходования бюджета — `none`, `ok`, `warning` (80% и больше)
-или `over`. В ПР6 его вычислял метод `Trip.budget_level(total)`, с ПР7
-для страниц сайта то же правило записано в SQL-запросе выражением
-`CASE ... END AS budget_level`; шаблон только выбирает по уровню CSS-класс.
+или `over`. В ПР6 его вычислял метод `Trip.budget_level(total)`, в ПР7 —
+SQL-выражение `CASE ... END AS budget_level`, с ПР9 — свойство
+`budget_level` модели `Trip`; шаблон только выбирает по уровню CSS-класс.
 
 ### Фильтры шаблонов
 
@@ -215,7 +221,7 @@ return render(request, "trips/trip_list.html", {"trips": trips_data})
 |---|---|---|
 | `length` | `{{ trips\|length }}`, `{{ participants\|length }}`, `{{ expenses\|length }}` | количество поездок, участников, расходов |
 | `default` | `{{ trip.name\|default:"Без названия" }}` | значение, если название пустое |
-| `date` | в ПР6 `{{ trip.start_date\|date:"d.m.Y" }}`; с ПР7 дату форматирует SQL: `strftime('%d.%m.%Y', start_date)` | дата в формате 03.11.2026 |
+| `date` | `{{ trip.start_date\|date:"d.m.Y" }}`, `{{ expense.expense_date\|date:"d.m.Y" }}` (в ПР7 дату форматировал SQL, с ПР9 снова фильтр: поле модели — `DateField`) | дата в формате 03.11.2026 |
 | `floatformat` | `{{ expense.amount\|floatformat:"2g" }} ₽` | сумма с двумя знаками и разделением разрядов: 25 500,00 ₽ |
 | `capfirst` | `{{ expense.category\|capfirst }}` | категория с заглавной буквы |
 
@@ -249,11 +255,11 @@ Bootstrap 5.3 подключается через CDN и отвечает за �
 В ПР5–ПР6 view-функции вызывали `storage.load_all()` и функции ПР3
 (`find_trip_by_id()`, `sort_trips()`, `iter_trip_expenses()`,
 `get_total()` и др.). В ПР7 поиск, отбор, сортировка и подсчет итогов
-перенесены в SQL-запросы (см. раздел «База данных SQLite (ПР7)»).
-Расчет «кто кому должен» по-прежнему выполняет класс `Settlement`:
-view-функция `trip_settlement` строит объекты `Trip`, `Participant`
-и `Expense` из строк SQLite и вызывает `get_balances()` и
-`get_transfers()`.
+выполняли SQL-запросы, с ПР9 — запросы Django ORM (см. раздел
+«Модели Django и ORM (ПР9)»). Расчет «кто кому должен» по-прежнему
+выполняет класс `Settlement`: функция `load_settlement()` строит объекты
+`Trip`, `Participant` и `Expense` ПР3 из записей моделей Django и
+вызывает `get_balances()` и `get_transfers()`.
 
 Отложены до появления форм и POST-запросов: создание поездки, добавление
 участника, добавление и удаление расхода. Эти операции по-прежнему
@@ -261,9 +267,12 @@ view-функция `trip_settlement` строит объекты `Trip`, `Parti
 
 ## База данных SQLite (ПР7)
 
-Данные проекта перенесены из JSON-файлов в базу SQLite
-`data/splitter.sqlite`. Работа с базой выполняется модулем `sqlite3`
-стандартной библиотеки Python, без Django ORM.
+В ПР7 данные проекта перенесены из JSON-файлов в базу SQLite
+`data/splitter.sqlite`, с которой страницы работали модулем `sqlite3`
+без Django ORM. С ПР9 страницы работают с базой Django `db.sqlite3`
+через ORM, а `data/splitter.sqlite` осталась исходной базой, из которой
+данные переносятся в базу Django. Файлы SQL-слоя сохранены: на них
+построены перенос данных и тесты `tests/test_database.py`.
 
 ```
 До ПР7:    JSON → storage.py → объекты Python → Django view → шаблон
@@ -360,7 +369,11 @@ sqlite> PRAGMA foreign_key_list(expenses);
 
 ### SQL-запросы (`sql/queries.sql`)
 
-| № | Запрос | Элементы SQL | Где используется |
+Колонка «Где использовался» показывает страницы ПР7. С ПР9 эти страницы
+получают те же данные запросами ORM (таблица «Запросы ORM» ниже),
+а файл сохранен как SQL-реализация предметной области.
+
+| № | Запрос | Элементы SQL | Где использовался |
 |---|---|---|---|
 | 1 | список поездок | SELECT, ORDER BY | форма поиска `/expenses/` |
 | 2 | участники поездки | WHERE `trip_id = ?` | `/trips/<id>/`, расчет |
@@ -397,47 +410,171 @@ GROUP BY participants.id
 ORDER BY paid_total DESC, participants.name;
 ```
 
-### Получение данных в Django-представлениях
+## Модели Django и ORM (ПР9)
 
-Каждая view-функция открывает соединение через `get_connection()`,
-настраивает `conn.row_factory = sqlite3.Row`, выполняет запрос и передает
-результат в шаблон через контекст. Благодаря `sqlite3.Row` к полям
-обращаются по имени: `row["total"]` в Python и `{{ trip.total }}`
-в шаблоне.
+В ПР9 доступ к данным переведен с ручных SQL-запросов на Django ORM.
+Предметная область, страницы, шаблоны и адреса не изменились, поменялся
+только источник данных во view-функциях.
 
-```python
-def trip_detail(request, trip_id):
-    conn = get_connection()
-    conn.row_factory = sqlite3.Row
-    try:
-        trip = conn.execute(TRIP_QUERY, [trip_id]).fetchone()
-        ...
-    finally:
-        conn.close()
+```
+ПР7: SQLite → SQL-запрос → sqlite3 → Django view → context → шаблон
+ПР9: модели → запрос ORM → SQL → db.sqlite3 → объекты моделей → view → шаблон
 ```
 
-Значения из URL и формы (номер поездки, категория, сумма) передаются
-только параметрами `?`, например
-`conn.execute(EXPENSES_QUERY, [trip_id, trip_id, category, category, min_amount])`.
-Конкатенация строк и f-строки для подстановки значений в SQL
-не используются. Некорректные значения параметров (`?trip=abc`,
-отрицательная сумма, неизвестная категория) заменяются значениями
-по умолчанию.
+### Стратегия перехода
 
-### Страницы с данными из SQLite
+Выбран вариант «таблицы под управлением Django и перенос данных».
+Django работает с базой `db.sqlite3` (настройка `DATABASES`), таблицы в ней
+создают миграции. База ПР7 `data/splitter.sqlite` не меняется и служит
+источником: скрипт `db/import_sqlite_to_orm.py` читает ее и создает записи
+через ORM. Подключать модели к старым таблицам через `db_table` не стали:
+таблица `expense_shares` с составным ключом не похожа на таблицу
+связи «многие ко многим», которую ожидает Django, а история миграций
+для старых таблиц отсутствует.
 
-| Страница | Что показывает | Запросы |
+### Модели
+
+Модели лежат в `models.py` приложений: `Trip` и `Participant` — в `trips`
+(участник всегда принадлежит поездке), `Expense` — в `expenses`.
+Первичный ключ `id` Django добавляет сам (`BigAutoField`).
+
+**Trip** (`trips/models.py`) — поездка:
+
+| Поле | Тип | Назначение |
 |---|---|---|
-| Главная `/` | сводка: поездки, участники, расходы, сумма | 11 |
-| Поездки `/trips/` | карточки поездок с итогами и отметкой бюджета | 12 |
-| Поездка `/trips/<id>/` | бюджет, участники, расходы, кто еще не платил | 2, 6, 7, 13 |
-| Расчет `/trips/<id>/settlement/` | балансы и переводы (класс `Settlement`) | 2, 7, 10 |
-| Расходы `/expenses/` | поиск по поездке, категории и сумме, итог | 1, 4, 5 |
-| Расход `/expenses/<id>/` | плательщик, участники, доля каждого | 8, 9 |
-| Статистика `/expenses/statistics/` | категории, плательщики, крупные расходы и категории, бюджет | 3, 14–17 |
+| `name` | `CharField(max_length=200)` | название |
+| `start_date`, `end_date` | `DateField` | даты; ограничение `CheckConstraint`: начало не позже окончания |
+| `budget` | `DecimalField(12, 2, null=True, blank=True)` | бюджет; пусто — бюджет не задан |
 
-Навигация: Главная | Поездки | Расходы | Статистика. Все ссылки
-строятся тегом `{% url %}`; SQL-запросы в интерфейсе не показываются.
+Методы и свойства: `duration` (дни поездки), `get_total()`,
+`budget_level`, `used_percent`, `budget_diff`. Менеджер
+`Trip.objects.with_totals()` добавляет к поездкам `total`,
+`expenses_count` и `participants_count` одним запросом.
+
+**Participant** (`trips/models.py`) — участник:
+
+| Поле | Тип | Назначение |
+|---|---|---|
+| `trip` | `ForeignKey(Trip, on_delete=CASCADE, related_name="participants")` | поездка |
+| `name` | `CharField(max_length=100)` | имя; `UniqueConstraint(trip, name)` — без повторов имен в поездке |
+
+**Expense** (`expenses/models.py`) — расход:
+
+| Поле | Тип | Назначение |
+|---|---|---|
+| `trip` | `ForeignKey(Trip, on_delete=CASCADE, related_name="expenses")` | поездка |
+| `title` | `CharField(max_length=200)` | название |
+| `amount` | `DecimalField(12, 2)`, `MinValueValidator(0.01)`, `CheckConstraint(amount > 0)` | сумма |
+| `category` | `CharField(choices=Category.choices, default="прочее")`, `CheckConstraint` | категория из 5 значений |
+| `expense_date` | `DateField` | дата |
+| `payer` | `ForeignKey(Participant, on_delete=RESTRICT, related_name="paid_expenses")` | кто оплатил |
+| `split_between` | `ManyToManyField(Participant, related_name="shared_expenses")` | между кем делится |
+
+Метод `clean()` не дает выбрать плательщика из другой поездки,
+`get_share()` считает долю участника функцией `calculate_share()` из ПР3.
+У всех моделей заданы `__str__()`, `Meta.ordering`, `verbose_name`
+и `verbose_name_plural`; у полей — русские `verbose_name`.
+
+Связи:
+
+```
+Trip 1 ──< Participant            (participant.trip,  trip.participants)
+Trip 1 ──< Expense                (expense.trip,      trip.expenses)
+Participant 1 ──< Expense         (expense.payer,     participant.paid_expenses)
+Expense >──< Participant          (expense.split_between, participant.shared_expenses)
+```
+
+Правила удаления: при удалении поездки удаляются ее участники и расходы
+(`CASCADE`). Участника, который оплачивал расходы, отдельно удалить нельзя
+(`RESTRICT`, ошибка `RestrictedError`), но вместе с поездкой он удаляется.
+С `PROTECT` удалить такую поездку было бы нельзя совсем.
+
+### Миграции
+
+| Файл | Что создает |
+|---|---|
+| `trips/migrations/0001_initial.py` | таблицы `trips_trip`, `trips_participant` и их ограничения |
+| `expenses/migrations/0001_initial.py` | таблицы `expenses_expense` и `expenses_expense_split_between` |
+
+```bash
+python manage.py makemigrations       # создать файлы миграций по моделям
+python manage.py showmigrations       # какие миграции применены ([X])
+python manage.py sqlmigrate expenses 0001   # посмотреть SQL миграции
+python manage.py migrate              # применить миграции к db.sqlite3
+python manage.py makemigrations --check     # модели и миграции совпадают
+```
+
+### Перенос данных из базы ПР7
+
+```bash
+python -m db.inspect_source_db        # таблицы, столбцы и число записей ПР7
+python manage.py migrate
+python -m db.import_sqlite_to_orm     # перенос в базу Django
+```
+
+Скрипт переносит поездки, потом участников, потом расходы и списки
+участников расходов (`split_between.set()`), сохраняя номера записей,
+поэтому связи не теряются. Записи создаются `update_or_create()`, так что
+повторный запуск обновляет их, а не дублирует. Все выполняется в одной
+транзакции `transaction.atomic()`. Даты из строк `YYYY-MM-DD`
+превращаются в `date`, суммы — в `Decimal`. Результат: 2 поездки,
+5 участников, 6 расходов — столько же, сколько в базе ПР7.
+
+### Запросы ORM
+
+| № | Запрос ORM | Приемы | Где |
+|---|---|---|---|
+| 1 | `Trip.objects.with_totals()` | `annotate()`, `Sum`, `Count`, `Coalesce`, подзапрос `Subquery` | `/trips/`, `/trips/<id>/` |
+| 2 | `.filter(text_search(q, "name"))` | поиск по строковому полю `icontains` | `/trips/?q=` |
+| 3 | `Trip.objects.with_totals().filter(pk=trip_id).first()` | один объект по номеру | `/trips/<id>/` |
+| 4 | `trip.participants.all()` | обратная связь `related_name` | `/trips/<id>/`, расчет |
+| 5 | `trip.expenses.select_related("payer")` | связанный объект одним запросом | `/trips/<id>/` |
+| 6 | `trip.participants.filter(paid_expenses__isnull=True)` | фильтр по связанной модели | `/trips/<id>/` |
+| 7 | `record.expenses.prefetch_related("split_between")` | связь «многие ко многим» без лишних запросов | `/trips/<id>/settlement/` |
+| 8 | `Expense.objects.aggregate(Count, Sum, Max)`, `Trip.objects.count()` | сводные показатели | `/` |
+| 9 | `.filter(trip_id=...)`, `.filter(category=...)`, `.filter(amount__gte=...)` | фильтр по одному и нескольким условиям | `/expenses/` |
+| 10 | `.filter(text_search(q, "title", "payer__name", "trip__name"))` | поиск по нескольким полям, объекты `Q` через ИЛИ | `/expenses/?q=` |
+| 11 | `.order_by(*SORT_OPTIONS[sort])` | сортировка по одному, нескольким полям и полю поездки `trip__name` | `/expenses/?sort=` |
+| 12 | `found.aggregate(expenses_count=Count("pk"), expenses_total=Sum("amount"))` | итог найденного | `/expenses/` |
+| 13 | `Paginator(found, 5).get_page(page)` | постраничный вывод | `/expenses/?page=` |
+| 14 | `Trip.objects.only("name")` | сокращенный набор полей | список поездок в форме |
+| 15 | `Expense.objects.select_related("trip", "payer").get(pk=...)` | `get()` и `DoesNotExist` → 404 | `/expenses/<id>/` |
+| 16 | `expense.split_between.order_by("pk")` | связь «многие ко многим» | `/expenses/<id>/` |
+| 17 | `Expense.objects.values("category").annotate(Count, Sum, Avg, Max)` | группировка по категории | статистика |
+| 18 | `Participant.objects.select_related("trip").annotate(paid_total=Coalesce(Sum(...), 0))` | LEFT JOIN: участники без расходов тоже в списке | статистика |
+| 19 | `.values("category").annotate(total=Sum("amount")).filter(total__gte=...)` | условие на сумму группы (HAVING) | статистика |
+| 20 | `Trip.objects.with_totals().exclude(budget__isnull=True).filter(total__gte=F("budget") * 0.8)` | `exclude()`, выражение `F` | статистика |
+| 21 | `Expense.objects.select_related("trip").order_by("-amount", "pk")[:3]` | сортировка и ограничение `LIMIT` | статистика |
+
+Параметры из адреса проверяются: номер поездки и суммы — функцией
+`parse_number()` (кривые, отрицательные, `nan` и бесконечность
+заменяются значениями по умолчанию), категория — по списку
+`Category.values`, сортировка — по словарю `SORT_OPTIONS` (в `order_by()`
+не попадает то, что пришло в адресе), неверный номер страницы
+`Paginator.get_page()` заменяет ближайшей существующей. Ссылки на страницы
+строит тег `{% querystring page=... %}`, поэтому поиск, фильтры
+и сортировка сохраняются при переходе между страницами.
+
+SQLite сравнивает без учета регистра только латинские буквы, поэтому
+функция `splitter/search.py: text_search()` ищет запрос как есть,
+строчными буквами и с заглавной первой буквой: «казань» находит «Казань».
+
+### Страницы
+
+| Страница | Что показывает | Запросы ORM |
+|---|---|---|
+| Главная `/` | сводка: поездки, участники, расходы, сумма | 8 |
+| Поездки `/trips/` | карточки поездок с итогами, поиск по названию | 1, 2 |
+| Поездка `/trips/<id>/` | бюджет, участники, расходы, кто еще не платил | 3–6 |
+| Расчет `/trips/<id>/settlement/` | балансы и переводы (класс `Settlement`) | 4, 7 |
+| Расходы `/expenses/` | поиск, отбор, сортировка, страницы по 5 расходов, итог | 9–14 |
+| Расход `/expenses/<id>/` | поездка, плательщик, участники, доля каждого | 15, 16 |
+| Статистика `/expenses/statistics/` | категории, плательщики, крупные расходы и категории, бюджет | 17–21 |
+
+Если поездки или расхода с таким номером нет, страница показывает
+«Поездка не найдена» / «Расход не найден» с кодом 404. При пустой базе
+страницы открываются и показывают нули и сообщения «Поездок пока нет»,
+«Расходы не найдены.», «Данные отсутствуют.».
 
 ## Объектная модель (ПР3)
 
@@ -541,18 +678,21 @@ trip-expense-splitter/
 ├── manage.py               # управление Django-проектом
 ├── main.py                 # консольная версия: точка запуска и меню
 ├── storage.py              # JSON ↔ объекты
-├── db/                     # слой базы данных SQLite (ПР7)
+├── db/                     # исходная база SQLite (ПР7) и перенос (ПР9)
 │   ├── __init__.py
-│   ├── database.py         # подключение к базе
-│   ├── import_json.py      # перенос данных из JSON в базу
-│   └── testing.py          # временная база для тестов страниц
+│   ├── database.py         # подключение к базе ПР7
+│   ├── import_json.py      # перенос данных из JSON в базу ПР7
+│   ├── inspect_source_db.py    # таблицы и записи базы ПР7
+│   ├── import_sqlite_to_orm.py # перенос из базы ПР7 в базу Django
+│   └── testing.py          # тестовые данные для Django-тестов
 ├── sql/
 │   ├── schema.sql          # создание таблиц
 │   └── queries.sql         # SQL-запросы проекта
 ├── utils.py                # разбор сумм и дат, безопасный ввод
 ├── splitter/               # конфигурация Django-проекта
-│   ├── settings.py         # TEMPLATES["DIRS"] = [BASE_DIR / "templates"]
+│   ├── settings.py         # TEMPLATES["DIRS"], DATABASES → db.sqlite3
 │   ├── urls.py             # корневые маршруты
+│   ├── search.py           # поиск без учета регистра (кириллица)
 │   ├── asgi.py
 │   └── wsgi.py
 ├── templates/              # шаблоны уровня проекта
@@ -571,6 +711,8 @@ trip-expense-splitter/
 │   ├── views.py
 │   └── tests.py
 ├── trips/                  # Django-приложение: поездки и расчет
+│   ├── models.py           # модели Trip и Participant (ПР9)
+│   ├── migrations/         # миграции (ПР9)
 │   ├── templates/trips/
 │   │   ├── trip_list.html
 │   │   ├── trip_detail.html
@@ -582,6 +724,8 @@ trip-expense-splitter/
 │   ├── views.py
 │   └── tests.py
 ├── expenses/               # Django-приложение: расходы
+│   ├── models.py           # модель Expense (ПР9)
+│   ├── migrations/         # миграции (ПР9)
 │   ├── templates/expenses/
 │   │   ├── expense_list.html
 │   │   ├── expense_detail.html
@@ -601,7 +745,7 @@ trip-expense-splitter/
 │   ├── trips.json
 │   ├── participants.json
 │   ├── expenses.json
-│   └── splitter.sqlite     # база данных SQLite (ПР7)
+│   └── splitter.sqlite     # исходная база SQLite (ПР7)
 └── tests/
     ├── conftest.py         # общие объекты для тестов
     ├── test_trips.py
@@ -672,6 +816,10 @@ trip-expense-splitter/
   (`sql/schema.sql`), перенос данных из JSON (`db/import_json.py`),
   17 SQL-запросов (`sql/queries.sql`), страницы сайта получают данные
   SQL-запросами через `sqlite3`, поиск расходов и страница статистики.
+- **ПР9** — Django ORM: модели `Trip`, `Participant`, `Expense` со связями
+  `ForeignKey` и `ManyToManyField`, миграции, перенос данных из базы ПР7
+  в базу Django (`db/import_sqlite_to_orm.py`), страницы получают данные
+  запросами ORM; поиск, сортировка и постраничный вывод списка расходов.
 
 ## Требования
 
@@ -693,14 +841,17 @@ pip install -r requirements.txt
 Веб-версия (Django):
 
 ```bash
-python -m db.import_json      # создать базу SQLite и перенести данные JSON
-python manage.py migrate      # служебные таблицы Django, один раз
+python manage.py migrate              # создать таблицы в db.sqlite3
+python -m db.import_sqlite_to_orm     # перенести данные из базы ПР7
 python manage.py check
 python manage.py runserver
 ```
 
-База `data/splitter.sqlite` уже лежит в репозитории; `python -m db.import_json`
-нужен, чтобы пересоздать ее данные после изменения JSON-файлов.
+Файл `db.sqlite3` в репозиторий не попадает (`.gitignore`), поэтому после
+клонирования его создают две первые команды. Исходная база
+`data/splitter.sqlite` лежит в репозитории; если изменились JSON-файлы,
+сначала пересоздайте ее командой `python -m db.import_json`, а потом
+снова запустите перенос.
 
 После запуска открыть в браузере http://127.0.0.1:8000/.
 
@@ -726,8 +877,8 @@ python main.py
 ## Запуск тестов
 
 ```bash
-pytest -v                  # тесты предметной области (ПР1–ПР3) и базы (ПР7)
-python manage.py test      # тесты веб-страниц (ПР5–ПР7)
+pytest -v                  # тесты предметной области (ПР1–ПР3) и базы ПР7
+python manage.py test      # тесты моделей, переноса данных и страниц (ПР5–ПР9)
 ```
 
 Тесты проверяют создание объектов и значения атрибутов, методы и `__str__`
@@ -736,9 +887,12 @@ python manage.py test      # тесты веб-страниц (ПР5–ПР7)
 и восстановление связей при загрузке. Тесты базы (`tests/test_database.py`)
 создают временную базу, проверяют таблицы, внешние ключи и ограничения,
 перенос данных из JSON, повторный импорт и выполнение всех запросов
-из `sql/queries.sql`. Тесты Django-приложений работают с временной базой
-SQLite и проверяют, что каждая страница открывается нужным шаблоном,
-показывает данные из базы (итоги, поиск, статистику, HAVING с параметром),
+из `sql/queries.sql`. Тесты Django-приложений работают с тестовой базой
+Django, которую заполняет тот же перенос JSON → база ПР7 → база Django.
+Они проверяют модели (строки, связи и обратные связи, ограничения базы,
+правила удаления), перенос данных и его повтор, что каждая страница
+открывается нужным шаблоном, показывает данные из базы (итоги, поиск,
+сортировку, страницы списка, статистику, отбор по сумме категории),
 подключает статические файлы, что имена маршрутов дают правильные адреса
 и что для несуществующих номеров и адресов возвращается 404.
 
@@ -748,12 +902,14 @@ SQLite и проверяют, что каждая страница открыв�
 flake8 . --extend-exclude=venv
 ```
 
+Миграции создает сам Django, поэтому flake8 их не проверяет
+(исключены в `.flake8`).
+
 ## План развития
 
 На следующих этапах планируется:
 
-- подключение базы данных к Django через Django ORM: модели `Trip`,
-  `Participant`, `Expense`, миграции и административная панель;
+- административная панель Django для поездок, участников и расходов;
 - формы Django для создания поездок, участников и расходов;
 - реализация пользователей, регистрации и разграничения доступа к поездкам;
 - разработка REST API;
