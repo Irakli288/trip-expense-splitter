@@ -6,6 +6,8 @@
 Все настройки: https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import os
+import sys
 from pathlib import Path
 
 # Пути внутри проекта строим так: BASE_DIR / 'папка'.
@@ -26,6 +28,14 @@ SECRET_KEY = (
 DEBUG = True
 
 ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
+
+# Идет ли запуск тестов: при тестах панель отладки не подключаем,
+# иначе она добавляет свои запросы и мешает считать запросы страниц.
+TESTING = "test" in sys.argv or "PYTEST_VERSION" in os.environ
+
+# Панель Django Debug Toolbar показывается только при DEBUG
+# и только для этих адресов (то есть на своем компьютере).
+INTERNAL_IPS = ["127.0.0.1"]
 
 
 # Приложения проекта
@@ -52,6 +62,13 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
+DEBUG_TOOLBAR = DEBUG and not TESTING
+
+if DEBUG_TOOLBAR:
+    INSTALLED_APPS.append("debug_toolbar")
+    # Middleware панели ставим первым, чтобы она видела всю обработку.
+    MIDDLEWARE.insert(0, "debug_toolbar.middleware.DebugToolbarMiddleware")
+
 ROOT_URLCONF = "splitter.urls"
 
 TEMPLATES = [
@@ -64,6 +81,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "splitter.context_processors.site",
             ],
         },
     },
