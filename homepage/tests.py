@@ -1,6 +1,7 @@
 from django.test import TestCase, override_settings
 
 from db.testing import ProjectDataMixin
+from expenses.models import Expense, Status
 
 
 class HomepageTests(ProjectDataMixin, TestCase):
@@ -23,6 +24,20 @@ class HomepageTests(ProjectDataMixin, TestCase):
         self.assertEqual(summary["expenses_total"], 71000)
         self.assertEqual(summary["max_amount"], 25500)
         self.assertContains(response, "71\xa0000 ₽")
+
+    def test_summary_without_cancelled(self):
+        Expense.objects.filter(pk=1).update(status=Status.CANCELLED)
+        response = self.client.get("/")
+        summary = response.context["summary"]
+        self.assertEqual(summary["expenses_count"], 5)
+        self.assertEqual(summary["expenses_total"], 45500)
+        self.assertEqual(summary["max_amount"], 18000)
+        self.assertContains(response, "Отмененных расходов: 1")
+
+    def test_index_queries(self):
+        # Сводка, поездки, участники и число поездок для меню.
+        with self.assertNumQueries(4):
+            self.client.get("/")
 
     def test_static_files(self):
         response = self.client.get("/")

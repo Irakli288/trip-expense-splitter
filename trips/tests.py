@@ -3,6 +3,7 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import RestrictedError
 from django.test import TestCase
@@ -10,9 +11,10 @@ from django.urls import reverse
 
 from db import import_json, import_sqlite_to_orm
 from db.testing import ProjectDataMixin
-from expenses.models import Expense
+from expenses.models import Expense, Status
 
 from .models import Participant, Trip
+from .slugs import make_slug
 
 
 class TripModelTests(ProjectDataMixin, TestCase):
@@ -88,6 +90,42 @@ class TripModelTests(ProjectDataMixin, TestCase):
         self.assertEqual(Participant.objects.filter(trip_id=2).count(), 0)
         self.assertEqual(Expense.objects.filter(trip_id=2).count(), 0)
 
+    def test_slug_from_name(self):
+        self.assertEqual(Trip.objects.get(pk=1).slug, "poezdka-v-kazan")
+        self.assertEqual(Trip.objects.get(pk=2).slug, "pokhod-na-altai")
+        self.assertEqual(
+            make_slug("Щучье озеро, 2026!"), "shchuche-ozero-2026"
+        )
+        self.assertEqual(make_slug("2025"), "trip-2025")
+        self.assertEqual(make_slug("???"), "trip")
+
+    def test_slug_is_unique(self):
+        trip = Trip.objects.create(
+            name="Поездка в Казань",
+            start_date=date(2027, 1, 3),
+            end_date=date(2027, 1, 5),
+        )
+        self.assertEqual(trip.slug, "poezdka-v-kazan-2")
+        self.assertEqual(trip.get_absolute_url(), "/trips/poezdka-v-kazan-2/")
+        # Переименование не меняет адрес: старые ссылки продолжают работать.
+        trip.name = "Казань зимой"
+        trip.save()
+        self.assertEqual(trip.slug, "poezdka-v-kazan-2")
+
+    def test_slug_only_digits(self):
+        trip = Trip.objects.get(pk=1)
+        trip.slug = "2026"
+        with self.assertRaises(ValidationError):
+            trip.full_clean()
+
+    def test_cancelled_expense_not_in_totals(self):
+        Expense.objects.filter(pk=1).update(status=Status.CANCELLED)
+        kazan = Trip.objects.with_totals().get(pk=1)
+        self.assertEqual(kazan.total, 25500)
+        self.assertEqual(kazan.expenses_count, 3)
+        self.assertEqual(Trip.objects.get(pk=1).get_total(), 25500)
+        self.assertEqual(kazan.budget_level, "ok")
+
 
 class TransferTests(TestCase):
     def test_transfer_keeps_ids_and_links(self):
@@ -117,10 +155,15 @@ class TransferTests(TestCase):
 class TripPagesTests(ProjectDataMixin, TestCase):
     def test_named_urls(self):
         self.assertEqual(reverse("trips:list"), "/trips/")
-        self.assertEqual(reverse("trips:detail", args=[1]), "/trips/1/")
         self.assertEqual(
-            reverse("trips:settlement", args=[1]), "/trips/1/settlement/"
+            reverse("trips:detail", args=["poezdka-v-kazan"]),
+            "/trips/poezdka-v-kazan/",
         )
+        self.assertEqual(
+            reverse("trips:settlement", args=["poezdka-v-kazan"]),
+            "/trips/poezdka-v-kazan/settlement/",
+        )
+        self.assertEqual(reverse("trips:by_id", args=[1]), "/trips/1/")
 
     def test_trips_list(self):
         response = self.client.get("/trips/")
@@ -139,25 +182,49 @@ class TripPagesTests(ProjectDataMixin, TestCase):
         self.assertContains(response, "Поездки не найдены.")
 
     def test_trip_detail(self):
-        response = self.client.get("/trips/1/")
+        response = self.client.get("/trips/poezdka-v-kazan/")
         self.assertTemplateUsed(response, "trips/trip_detail.html")
         self.assertTemplateUsed(response, "trips/includes/budget_badge.html")
         self.assertContains(response, "Аренда квартиры")
         self.assertContains(response, "Максим")
         self.assertContains(response, "03.11.2026")
         self.assertContains(response, "израсходовано 85% бюджета")
-        self.assertContains(response, 'href="/trips/1/settlement/"')
+        self.assertContains(
+            response, 'href="/trips/poezdka-v-kazan/settlement/"'
+        )
 
     def test_trip_detail_not_paid(self):
-        response = self.client.get("/trips/2/")
+        response = self.client.get("/trips/pokhod-na-altai/")
         names = [person.name for person in response.context["not_paid"]]
         self.assertEqual(names, ["Давид"])
 
+    def test_not_paid_ignores_cancelled(self):
+        # Отменяем оба расхода Анны: она попадает в список неплативших.
+        Expense.objects.filter(trip_id=1, payer__name="Анна").update(
+            status=Status.CANCELLED
+        )
+        response = self.client.get("/trips/poezdka-v-kazan/")
+        names = [person.name for person in response.context["not_paid"]]
+        self.assertEqual(names, ["Анна"])
+        self.assertContains(response, "Отменен")
+
+    def test_old_address_redirects(self):
+        response = self.client.get("/trips/1/")
+        self.assertRedirects(
+            response, "/trips/poezdka-v-kazan/", status_code=301
+        )
+
     def test_trip_settlement(self):
-        response = self.client.get("/trips/1/settlement/")
+        response = self.client.get("/trips/poezdka-v-kazan/settlement/")
         self.assertTemplateUsed(response, "trips/trip_settlement.html")
         self.assertContains(response, "Максим → Ираклий")
         self.assertContains(response, "Максим → Анна")
+
+    def test_settlement_without_cancelled(self):
+        # Отменяем все расходы поездки: переводить никому ничего не нужно.
+        Expense.objects.filter(trip_id=1).update(status=Status.CANCELLED)
+        response = self.client.get("/trips/poezdka-v-kazan/settlement/")
+        self.assertContains(response, "Переводы не нужны")
 
     def test_missing_trip(self):
         response = self.client.get("/trips/999/")
@@ -167,11 +234,33 @@ class TripPagesTests(ProjectDataMixin, TestCase):
         )
 
     def test_missing_trip_settlement(self):
-        response = self.client.get("/trips/999/settlement/")
+        response = self.client.get("/trips/net-takoi/settlement/")
         self.assertContains(
             response, "Поездка не найдена", status_code=404
         )
 
-    def test_not_int_id(self):
-        response = self.client.get("/trips/abc/")
-        self.assertEqual(response.status_code, 404)
+    def test_missing_slug(self):
+        response = self.client.get("/trips/net-takoi/")
+        self.assertContains(
+            response, "Поездка не найдена", status_code=404
+        )
+
+    def test_query_counts(self):
+        """Число запросов страницы не растет вместе с числом записей.
+
+        Один из запросов на каждой странице — число поездок для меню.
+        """
+        pages = {
+            "/trips/": 2,
+            "/trips/poezdka-v-kazan/": 5,
+            "/trips/poezdka-v-kazan/settlement/": 5,
+        }
+        for url, count in pages.items():
+            with self.subTest(url=url), self.assertNumQueries(count):
+                self.client.get(url)
+
+    def test_context_processor(self):
+        response = self.client.get("/trips/")
+        self.assertEqual(response.context["site_name"],
+                         "Сервис расходов поездки")
+        self.assertContains(response, 'text-primary">2</span>')
