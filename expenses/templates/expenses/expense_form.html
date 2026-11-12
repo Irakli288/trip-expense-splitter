@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}
+    {% if expense %}Изменить расход{% else %}Новый расход{% endif %} – Сервис расходов поездки
+{% endblock %}
+
+{% block content %}
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <h1 class="h3 mb-3">
+                {% if expense %}
+                    Изменить расход «{{ expense.title }}»
+                {% else %}
+                    Новый расход{% if trip %} в поездке «{{ trip.name }}»{% endif %}
+                {% endif %}
+            </h1>
+            {% if expense.is_cancelled %}
+                <div class="alert alert-secondary">Расход отменен: изменения сохранятся, но в расчет он не входит.</div>
+            {% endif %}
+
+            {# POST: форма меняет данные. enctype нужен, чтобы браузер отправил файл. #}
+            <form method="post" enctype="multipart/form-data" class="card card-body expense-form" novalidate>
+                {# Токен защищает запрос от подделки с чужого сайта (CSRF). #}
+                {% csrf_token %}
+
+                {# Ошибки всей формы, а не отдельного поля. #}
+                {% if form.non_field_errors %}
+                    <div class="alert alert-danger" role="alert">
+                        {% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
+                    </div>
+                {% endif %}
+
+                {% for field in form %}
+                    <div class="mb-3">
+                        {% if field.name == "split_between" %}
+                            <div class="form-label">{{ field.label }}</div>
+                            {% for checkbox in field %}
+                                <div class="form-check form-check-inline">
+                                    {{ checkbox.tag }}
+                                    <label class="form-check-label" for="{{ checkbox.id_for_label }}">{{ checkbox.choice_label }}</label>
+                                </div>
+                            {% endfor %}
+                        {% else %}
+                            {{ field.label_tag }}
+                            {{ field }}
+                        {% endif %}
+                        {% if field.help_text %}
+                            <div class="form-text">{{ field.help_text }}</div>
+                        {% endif %}
+                        {% for error in field.errors %}
+                            <div class="invalid-feedback d-block">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                {% endfor %}
+
+                <div class="d-flex flex-wrap gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        {% if expense %}Сохранить изменения{% else %}Добавить расход{% endif %}
+                    </button>
+                    {% if expense %}
+                        <a href="{{ expense.get_absolute_url }}" class="btn btn-outline-secondary">Отмена</a>
+                    {% elif trip %}
+                        <a href="{{ trip.get_absolute_url }}" class="btn btn-outline-secondary">Отмена</a>
+                    {% else %}
+                        <a href="{% url 'expenses:list' %}" class="btn btn-outline-secondary">Отмена</a>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+    </div>
+{% endblock %}

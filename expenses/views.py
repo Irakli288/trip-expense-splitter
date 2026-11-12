@@ -4,11 +4,18 @@ from decimal import Decimal
 from django.core.paginator import Paginator
 from django.db.models import Avg, Count, F, Max, Q, Sum
 from django.db.models.functions import Coalesce
-from django.shortcuts import render
+from django.contrib import messages
+from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.http import require_POST
 
 from trips.models import BUDGET_WARNING_SHARE, Participant, Trip
 
-from .forms import DEFAULT_SORT, SORT_OPTIONS, ExpenseFilterForm
+from .forms import (
+    DEFAULT_SORT,
+    SORT_OPTIONS,
+    ExpenseFilterForm,
+    ExpenseForm,
+)
 from .models import Expense, Status
 
 DEFAULT_MIN_TOTAL = 5000
@@ -102,6 +109,63 @@ def expense_detail(request, expense_id):
         context,
         status=404 if expense is None else 200,
     )
+
+
+def expense_create(request):
+    """Новый расход. С адреса ?trip=<номер> поездка уже выбрана."""
+    trip = None
+    trip_id = request.GET.get("trip", "")
+    if trip_id.isdigit():
+        trip = get_object_or_404(Trip, pk=trip_id)
+    if request.method == "POST":
+        # Связываем форму с данными и файлами, которые прислал браузер.
+        form = ExpenseForm(request.POST, request.FILES, trip=trip)
+        # Сохраняем только после всех проверок формы и модели.
+        if form.is_valid():
+            # save() создает запись и заполняет связь split_between.
+            expense = form.save()
+            messages.success(request, f"Расход «{expense.title}» добавлен.")
+            return redirect(expense)
+    else:
+        # GET: пустая форма (дата по умолчанию — сегодня).
+        form = ExpenseForm(trip=trip)
+    context = {"form": form, "trip": trip}
+    return render(request, "expenses/expense_form.html", context)
+
+
+def expense_update(request, expense_id):
+    """Редактирование расхода. Нет такого расхода — страница 404."""
+    expense = get_object_or_404(
+        Expense.objects.select_related("trip"), pk=expense_id
+    )
+    if request.method == "POST":
+        # instance: форма меняет этот расход, а не создает новый.
+        form = ExpenseForm(request.POST, request.FILES, instance=expense)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Изменения сохранены.")
+            return redirect(expense)
+    else:
+        # GET: поля заполнены текущими значениями расхода.
+        form = ExpenseForm(instance=expense)
+    context = {"form": form, "expense": expense, "trip": expense.trip}
+    return render(request, "expenses/expense_form.html", context)
+
+
+@require_POST
+def expense_cancel(request, expense_id):
+    """Отмена расхода: меняется статус, запись не удаляется.
+
+    Только POST: открыть адрес в браузере (GET) — ответ 405.
+    Уже отмененный расход не найдется среди действующих — ответ 404.
+    """
+    expense = get_object_or_404(Expense.objects.active(), pk=expense_id)
+    expense.cancel()
+    messages.success(
+        request,
+        f"Расход «{expense.title}» отменен и больше не входит в расчет.",
+    )
+    return redirect(expense)
 
 
 def statistics(request):

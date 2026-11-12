@@ -40,9 +40,15 @@
                     {% for person in shares %}{{ person.name }}{% if not forloop.last %}, {% endif %}{% endfor %}
                     (по {{ share|floatformat:"2g" }} ₽ с каждого)
                 </p>
-                <a href="{% url 'expenses:list' %}" class="btn btn-outline-secondary">
-                    ← к списку расходов
-                </a>
+                <div class="d-flex flex-wrap gap-2">
+                    <a href="{% url 'expenses:update' expense.id %}" class="btn btn-primary">Изменить</a>
+                    {% if not expense.is_cancelled %}
+                        {% include "expenses/includes/cancel_form.html" %}
+                    {% endif %}
+                    <a href="{% url 'expenses:list' %}" class="btn btn-outline-secondary">
+                        ← к списку расходов
+                    </a>
+                </div>
             </div>
         </div>
     {% else %}

@@ -148,6 +148,11 @@ class Expense(models.Model):
     def is_cancelled(self):
         return self.status == Status.CANCELLED
 
+    def cancel(self):
+        """Отменяет расход: запись остается, но не входит в итоги."""
+        self.status = Status.CANCELLED
+        self.save(update_fields=["status"])
+
     def clean(self):
         """Платить за расход может только участник этой же поездки."""
         super().clean()

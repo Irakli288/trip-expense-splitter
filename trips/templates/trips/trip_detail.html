@@ -57,7 +57,10 @@
                 </p>
             </div>
             <div class="col-md-8">
-                <h2 class="h5">Расходы ({{ expenses|length }})</h2>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h2 class="h5 mb-0">Расходы ({{ expenses|length }})</h2>
+                    <a href="{% url 'expenses:create' %}?trip={{ trip.id }}" class="btn btn-sm btn-success">+ Добавить расход</a>
+                </div>
                 <table class="table table-striped">
                     <thead>
                         <tr>
