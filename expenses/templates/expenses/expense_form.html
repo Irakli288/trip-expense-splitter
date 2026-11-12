@@ -9,7 +9,8 @@
         <div class="col-lg-8">
             <h1 class="h3 mb-3">
                 {% if expense %}
-                    Изменить расход «{{ expense.title }}»
+                    {# Название из базы: при ошибке форма уже записала в expense введенные значения. #}
+                    Изменить расход «{{ form.initial.title }}»
                 {% else %}
                     Новый расход{% if trip %} в поездке «{{ trip.name }}»{% endif %}
                 {% endif %}

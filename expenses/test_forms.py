@@ -248,6 +248,8 @@ class ExpenseUpdateTests(ProjectDataMixin, TestCase):
         ))
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.context["form"].non_field_errors())
+        # В заголовке прежнее название, а не введенное.
+        self.assertContains(response, "Изменить расход «Ужин в ресторане»")
         self.assertEqual(Expense.objects.get(pk=3).title, "Ужин в ресторане")
 
     def test_bad_date_on_edit(self):
