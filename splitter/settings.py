@@ -139,6 +139,11 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 
+# Файлы, которые загружают пользователи (фото чеков). Они хранятся
+# отдельно от статических файлов приложения и не попадают в Git.
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
+
 # Тип первичного ключа по умолчанию
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 

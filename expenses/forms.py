@@ -131,6 +131,7 @@ class ExpenseForm(BootstrapFormMixin, forms.ModelForm):
             "expense_date",
             "payer",
             "split_between",
+            "receipt",
         ]
         labels = {
             "trip": "Поездка",
@@ -140,6 +141,7 @@ class ExpenseForm(BootstrapFormMixin, forms.ModelForm):
             "expense_date": "Дата",
             "payer": "Кто оплатил",
             "split_between": "На кого делится",
+            "receipt": "Фото чека",
         }
         help_texts = {
             "expense_date": "Дата должна попадать в даты поездки.",
@@ -153,6 +155,12 @@ class ExpenseForm(BootstrapFormMixin, forms.ModelForm):
             ),
             "amount": forms.NumberInput(attrs={"min": "0.01", "step": "0.01"}),
             "split_between": forms.CheckboxSelectMultiple,
+            # accept подсказывает браузеру показывать только картинки.
+            # Настоящую проверку делает сервер: ImageField открывает
+            # файл через Pillow и не примет не-картинку.
+            "receipt": forms.ClearableFileInput(
+                attrs={"accept": "image/jpeg,image/png,image/webp"}
+            ),
         }
 
     def __init__(self, *args, trip=None, **kwargs):
