@@ -185,8 +185,10 @@ class ExpensePagesTests(ProjectDataMixin, TestCase):
         self.assertContains(response, "отменено: 1")
         response = self.client.get("/expenses/", {"status": "cancelled"})
         self.assertEqual(self.titles(response), ["Аренда квартиры"])
+        # Неизвестный статус форма не пропускает: фильтр не применяется.
         response = self.client.get("/expenses/", {"status": "deleted"})
-        self.assertEqual(response.context["selected_status"], "")
+        self.assertTrue(response.context["filter_error"])
+        self.assertEqual(response.context["summary"]["expenses_count"], 6)
 
     def test_cancelled_expense_detail(self):
         Expense.objects.filter(pk=1).update(status=Status.CANCELLED)
