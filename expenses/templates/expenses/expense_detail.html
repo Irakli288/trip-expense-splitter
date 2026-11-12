@@ -40,9 +40,27 @@
                     {% for person in shares %}{{ person.name }}{% if not forloop.last %}, {% endif %}{% endfor %}
                     (по {{ share|floatformat:"2g" }} ₽ с каждого)
                 </p>
-                <a href="{% url 'expenses:list' %}" class="btn btn-outline-secondary">
-                    ← к списку расходов
-                </a>
+                <div class="mb-3">
+                    <strong>Фото чека:</strong>
+                    {% if expense.receipt %}
+                        <div class="mt-2">
+                            <a href="{{ expense.receipt.url }}" target="_blank">
+                                <img src="{{ expense.receipt.url }}" alt="Чек: {{ expense.title }}" class="img-fluid img-thumbnail receipt-image">
+                            </a>
+                        </div>
+                    {% else %}
+                        <span class="text-body-secondary">чек не приложен</span>
+                    {% endif %}
+                </div>
+                <div class="d-flex flex-wrap gap-2">
+                    <a href="{% url 'expenses:update' expense.id %}" class="btn btn-primary">Изменить</a>
+                    {% if not expense.is_cancelled %}
+                        {% include "expenses/includes/cancel_form.html" %}
+                    {% endif %}
+                    <a href="{% url 'expenses:list' %}" class="btn btn-outline-secondary">
+                        ← к списку расходов
+                    </a>
+                </div>
             </div>
         </div>
     {% else %}

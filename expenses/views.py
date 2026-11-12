@@ -4,26 +4,22 @@ from decimal import Decimal
 from django.core.paginator import Paginator
 from django.db.models import Avg, Count, F, Max, Q, Sum
 from django.db.models.functions import Coalesce
-from django.shortcuts import render
+from django.contrib import messages
+from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.http import require_POST
 
 from trips.models import BUDGET_WARNING_SHARE, Participant, Trip
 
-from .models import Category, Expense, Status
+from .forms import (
+    DEFAULT_SORT,
+    SORT_OPTIONS,
+    ExpenseFilterForm,
+    ExpenseForm,
+)
+from .models import Expense, Status
 
 DEFAULT_MIN_TOTAL = 5000
 EXPENSES_PER_PAGE = 5
-
-# Какие сортировки можно выбрать в списке расходов. В order_by()
-# попадают только поля из этого словаря, а не то, что пришло в адресе.
-SORT_OPTIONS = {
-    "date": ("сначала ранние", ["expense_date", "pk"]),
-    "-date": ("сначала поздние", ["-expense_date", "-pk"]),
-    "amount": ("сначала дешевые", ["amount", "pk"]),
-    "-amount": ("сначала дорогие", ["-amount", "pk"]),
-    "title": ("по названию", ["title", "pk"]),
-    "trip": ("по поездке", ["trip__name", "expense_date", "pk"]),
-}
-DEFAULT_SORT = "date"
 
 
 def parse_number(text, default=0, number_type=float):
@@ -43,23 +39,23 @@ def parse_number(text, default=0, number_type=float):
 
 
 def expenses(request):
-    trip_id = parse_number(request.GET.get("trip"), 0, int)
-    category = request.GET.get("category", "")
-    if category not in Category.values:
-        category = ""
-    min_amount = parse_number(request.GET.get("min_amount"), 0, Decimal)
-    status = request.GET.get("status", "")
-    if status not in Status.values:
-        status = ""
-    query = request.GET.get("q", "").strip()
-    sort = request.GET.get("sort", DEFAULT_SORT)
-    if sort not in SORT_OPTIONS:
-        sort = DEFAULT_SORT
+    # Форма проверяет параметры из адреса. Без параметров форма
+    # не связана с данными (is_bound = False): это первое открытие.
+    form = ExpenseFilterForm(request.GET or None)
+    form_valid = form.is_bound and form.is_valid()
+    filters = form.cleaned_data if form_valid else {}
+    trip = filters.get("trip")
+    category = filters.get("category")
+    status = filters.get("status")
+    min_amount = filters.get("min_amount")
+    query = filters.get("q")
+    sort = filters.get("sort") or DEFAULT_SORT
 
     # Поездку и плательщика берем тем же запросом, что и расходы.
     found = Expense.objects.with_relations()
-    if trip_id:
-        found = found.for_trip(trip_id)
+    # Фильтры применяются только после успешной проверки формы.
+    if trip:
+        found = found.for_trip(trip.pk)
     if status:
         found = found.filter(status=status)
     if category:
@@ -80,26 +76,18 @@ def expenses(request):
         ),
     )
     # Неправильный номер страницы (?page=abc или ?page=100)
-    # заменяется ближайшей существующей страницей.
+    # заменяется ближайшей существующей страницей. Номер страницы
+    # не входит в форму: это не условие отбора, а часть пагинации.
     page_obj = Paginator(found, EXPENSES_PER_PAGE).get_page(
         request.GET.get("page")
     )
     context = {
+        "form": form,
+        # Форма заполнена, но с ошибками: показываем предупреждение.
+        "filter_error": form.is_bound and not form_valid,
         "expenses": page_obj.object_list,
         "page_obj": page_obj,
         "summary": summary,
-        "trips": Trip.objects.only("name"),
-        "categories": Category.values,
-        "statuses": Status.choices,
-        "sort_options": {
-            key: label for key, (label, _) in SORT_OPTIONS.items()
-        },
-        "selected_trip": trip_id,
-        "selected_category": category,
-        "selected_status": status,
-        "selected_sort": sort,
-        "query": query,
-        "min_amount": request.GET.get("min_amount", ""),
     }
     return render(request, "expenses/expense_list.html", context)
 
@@ -121,6 +109,63 @@ def expense_detail(request, expense_id):
         context,
         status=404 if expense is None else 200,
     )
+
+
+def expense_create(request):
+    """Новый расход. С адреса ?trip=<номер> поездка уже выбрана."""
+    trip = None
+    trip_id = request.GET.get("trip", "")
+    if trip_id.isdigit():
+        trip = get_object_or_404(Trip, pk=trip_id)
+    if request.method == "POST":
+        # Связываем форму с данными и файлами, которые прислал браузер.
+        form = ExpenseForm(request.POST, request.FILES, trip=trip)
+        # Сохраняем только после всех проверок формы и модели.
+        if form.is_valid():
+            # save() создает запись и заполняет связь split_between.
+            expense = form.save()
+            messages.success(request, f"Расход «{expense.title}» добавлен.")
+            return redirect(expense)
+    else:
+        # GET: пустая форма (дата по умолчанию — сегодня).
+        form = ExpenseForm(trip=trip)
+    context = {"form": form, "trip": trip}
+    return render(request, "expenses/expense_form.html", context)
+
+
+def expense_update(request, expense_id):
+    """Редактирование расхода. Нет такого расхода — страница 404."""
+    expense = get_object_or_404(
+        Expense.objects.select_related("trip"), pk=expense_id
+    )
+    if request.method == "POST":
+        # instance: форма меняет этот расход, а не создает новый.
+        form = ExpenseForm(request.POST, request.FILES, instance=expense)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Изменения сохранены.")
+            return redirect(expense)
+    else:
+        # GET: поля заполнены текущими значениями расхода.
+        form = ExpenseForm(instance=expense)
+    context = {"form": form, "expense": expense, "trip": expense.trip}
+    return render(request, "expenses/expense_form.html", context)
+
+
+@require_POST
+def expense_cancel(request, expense_id):
+    """Отмена расхода: меняется статус, запись не удаляется.
+
+    Только POST: открыть адрес в браузере (GET) — ответ 405.
+    Уже отмененный расход не найдется среди действующих — ответ 404.
+    """
+    expense = get_object_or_404(Expense.objects.active(), pk=expense_id)
+    expense.cancel()
+    messages.success(
+        request,
+        f"Расход «{expense.title}» отменен и больше не входит в расчет.",
+    )
+    return redirect(expense)
 
 
 def statistics(request):

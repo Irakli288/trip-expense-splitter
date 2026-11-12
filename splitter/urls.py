@@ -15,6 +15,7 @@
 """
 
 from django.conf import settings
+from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 
@@ -24,6 +25,13 @@ urlpatterns = [
     path("trips/", include("trips.urls")),
     path("expenses/", include("expenses.urls")),
 ]
+
+# В режиме разработки загруженные файлы раздает сам Django.
+# На настоящем сервере это делает веб-сервер (например, nginx).
+if settings.DEBUG:
+    urlpatterns += static(
+        settings.MEDIA_URL, document_root=settings.MEDIA_ROOT
+    )
 
 if settings.DEBUG_TOOLBAR:
     from debug_toolbar.toolbar import debug_toolbar_urls

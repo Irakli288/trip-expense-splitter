@@ -71,3 +71,8 @@ main {
     margin-bottom: 0;
     color: var(--splitter-muted);
 }
+
+/* Фото чека на странице расхода (ПР11). */
+.receipt-image {
+    max-height: 320px;
+}

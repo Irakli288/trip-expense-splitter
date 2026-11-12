@@ -1,0 +1,6 @@
+{# Отмена меняет данные, поэтому это POST-форма, а не ссылка (ссылка — это GET). #}
+<form method="post" action="{% url 'expenses:cancel' expense.id %}" class="d-inline"
+      onsubmit="return confirm('Отменить расход «{{ expense.title|escapejs }}»? Он перестанет входить в расчет.');">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-sm btn-outline-danger">Отменить</button>
+</form>

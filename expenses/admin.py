@@ -68,7 +68,7 @@ class ExpenseAdmin(admin.ModelAdmin):
         ("Кто платил и на кого делится", {
             "fields": ["expense_date", "payer", "split_between"],
         }),
-        ("Статус", {"fields": ["status", "large"]}),
+        ("Статус и чек", {"fields": ["status", "large", "receipt"]}),
     ]
     actions = ["cancel_expenses", "restore_expenses"]
 

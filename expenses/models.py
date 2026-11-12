@@ -9,7 +9,7 @@
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
-from django.core.validators import MinValueValidator
+from django.core.validators import FileExtensionValidator, MinValueValidator
 from django.db import models
 from django.db.models import Case, Q, Value, When
 from django.urls import reverse
@@ -19,6 +19,7 @@ from splitter.search import text_search
 from trips.models import Participant, Trip
 
 from .choices import Category, Status
+from .validators import validate_receipt_size
 
 # С какой суммы расход считается крупным (поле is_large).
 LARGE_EXPENSE_AMOUNT = Decimal("10000")
@@ -105,6 +106,18 @@ class Expense(models.Model):
         default=Status.ACTIVE,
         help_text="Отмененный расход не входит в итоги и расчет долгов.",
     )
+    # Фото чека — необязательное. Сам файл лежит в папке media/receipts/,
+    # а в базе хранится только путь к нему.
+    receipt = models.ImageField(
+        "фото чека",
+        upload_to="receipts/%Y/%m/",
+        blank=True,
+        validators=[
+            FileExtensionValidator(["jpg", "jpeg", "png", "webp"]),
+            validate_receipt_size,
+        ],
+        help_text="JPG, PNG или WebP, не больше 5 МБ. Можно не прикладывать.",
+    )
     # Признак считает сама база по сумме расхода, руками его не меняют.
     is_large = models.GeneratedField(
         expression=Case(
@@ -147,6 +160,11 @@ class Expense(models.Model):
     @property
     def is_cancelled(self):
         return self.status == Status.CANCELLED
+
+    def cancel(self):
+        """Отменяет расход: запись остается, но не входит в итоги."""
+        self.status = Status.CANCELLED
+        self.save(update_fields=["status"])
 
     def clean(self):
         """Платить за расход может только участник этой же поездки."""
